@@ -1,0 +1,93 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"><title>Danbooru Prompt Card Lab</title><link rel="stylesheet" href="./style.css"/><style id="v154-readable-summary">
+.batch-item .summary{white-space:normal;}
+.v154-summary-grid{display:grid;grid-template-columns:1fr;gap:4px;line-height:1.55}
+.v154-summary-grid b{color:#9fe7ff;margin-right:4px}
+#batch-pool-stats{opacity:.75}
+</style><style id="v161-stable-summary">.batch-item .summary{white-space:normal}.v154-summary-grid{display:grid;grid-template-columns:1fr;gap:4px;line-height:1.55}.v154-summary-grid b{color:#9fe7ff;margin-right:4px}#batch-pool-stats{opacity:.75}</style><style id="v18-zh-prompt-style">
+.zh-prompt-box{margin-top:8px;border:1px solid rgba(159,231,255,.22);border-radius:12px;background:rgba(159,231,255,.055);padding:8px}
+.zh-prompt-title{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#9fe7ff;font-weight:700;font-size:13px;margin-bottom:6px}
+.zh-prompt-title button{font-size:12px;padding:4px 8px}
+.zh-prompt-text{white-space:pre-wrap;word-break:break-word;line-height:1.55;font-size:13px;color:#dfefff;max-height:150px;overflow:auto}
+</style><style id="v197-ui-style">
+.oc-tools{display:flex;gap:8px;margin:12px 0;align-items:center;flex-wrap:wrap}.oc-tools input{min-width:260px;flex:1}.oc-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}.oc-card{border:1px solid rgba(159,231,255,.16);background:rgba(255,255,255,.035);border-radius:14px;padding:10px}.oc-card.star{border-color:rgba(255,220,120,.45);box-shadow:0 0 0 1px rgba(255,220,120,.08)}.oc-head{display:flex;gap:10px;align-items:center}.oc-thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;background:#111827;flex:0 0 auto}.oc-meta{min-width:0;flex:1}.oc-meta h3{margin:0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.oc-meta p{margin:4px 0 0;color:#aab4c8;font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.oc-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.oc-actions button{padding:5px 8px;font-size:12px}.oc-card details{margin-top:8px}.oc-card details textarea{min-height:90px;font-size:12px}.pending-layout{display:grid;grid-template-columns:1fr 1fr;gap:16px}.pending-layout .library-panel:nth-child(3){grid-column:1 / -1}.compact-list .library-card{padding:10px}.compact-list textarea{min-height:80px}@media(max-width:980px){.pending-layout{grid-template-columns:1fr}.pending-layout .library-panel:nth-child(3){grid-column:auto}}
+</style><style id="v198-layout-style">
+/* v1.9.8 批量页重新排版 */
+#page-generator>.toolbar{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:14px;align-items:start;padding:16px 18px}
+#page-generator .toolbar .toolbar-group:first-child{display:grid;grid-template-columns:110px 160px minmax(260px,1.5fr) 130px 90px 120px 130px 120px 130px 110px;gap:10px;align-items:end;width:100%}
+#page-generator .toolbar .toolbar-group:nth-child(2){display:flex;flex-direction:column;gap:8px;align-items:stretch;justify-content:flex-start}
+#page-generator .toolbar label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#aeb7c9;letter-spacing:.02em;min-width:0}
+#page-generator .toolbar input,#page-generator .toolbar select{width:100%;box-sizing:border-box}
+#page-generator #make-batch{height:42px;align-self:end}
+#page-generator .batch-panel{margin-top:16px}
+@media(max-width:1500px){#page-generator .toolbar .toolbar-group:first-child{grid-template-columns:repeat(5,minmax(140px,1fr))}#page-generator>.toolbar{grid-template-columns:1fr}}
+@media(max-width:860px){#page-generator .toolbar .toolbar-group:first-child{grid-template-columns:1fr 1fr}#page-generator>.toolbar{grid-template-columns:1fr}}
+/* v1.9.8 去掉整条中文翻译框 */
+.zh-prompt-box{display:none!important}
+/* v1.9.8 OC 编辑态 */
+.oc-edit-banner{display:none;margin:10px 0;padding:8px 10px;border:1px solid rgba(159,231,255,.35);border-radius:10px;background:rgba(159,231,255,.08);color:#cdefff;font-size:13px}.oc-edit-banner.active{display:flex;justify-content:space-between;align-items:center;gap:8px}.oc-card.editing{outline:2px solid rgba(159,231,255,.55)}
+</style><style id="v199-foldered-oc-style">
+/* v1.9.9 OC 文件夹式管理 */
+#page-library .library-layout{grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);align-items:start}
+#page-library .oc-list{display:block}
+#page-library .oc-tools{display:grid;grid-template-columns:minmax(220px,1fr) 160px 140px minmax(150px,.7fr) 86px 96px;gap:8px;align-items:center}
+#page-library .oc-tools input,#page-library .oc-tools select,#page-library .oc-tools button{width:100%;min-width:0}
+#page-library #oc-image,#page-library #compress-oc-images{display:none!important}
+#page-library .oc-folder{border:1px solid rgba(159,231,255,.16);border-radius:14px;background:rgba(255,255,255,.03);margin:10px 0;overflow:hidden}
+#page-library .oc-folder.drag-over{border-color:rgba(159,231,255,.65);box-shadow:0 0 0 1px rgba(159,231,255,.18),0 0 24px rgba(159,231,255,.12)}
+#page-library .oc-folder-head{display:flex;align-items:center;gap:8px;padding:9px 10px;background:rgba(159,231,255,.055);cursor:pointer;user-select:none}
+#page-library .oc-folder-head .twisty{width:18px;text-align:center;color:#9fe7ff;font-weight:800}
+#page-library .oc-folder-title{font-weight:800;color:#eaf7ff;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#page-library .oc-folder-count{font-size:12px;color:#aab4c8;margin-left:auto;white-space:nowrap}
+#page-library .oc-folder-actions{display:flex;gap:6px;margin-left:6px}
+#page-library .oc-folder-actions button{padding:4px 7px;font-size:12px}
+#page-library .oc-folder-body{padding:8px;min-height:42px}
+#page-library .oc-folder.collapsed .oc-folder-body{display:none}
+#page-library .oc-drop-hint{border:1px dashed rgba(159,231,255,.22);border-radius:10px;padding:8px;color:#8895ad;font-size:12px;text-align:center;margin:4px 0}
+#page-library .oc-row{display:grid;grid-template-columns:minmax(120px,1.1fr) minmax(100px,.9fr) minmax(210px,1.2fr) auto;gap:8px;align-items:center;border:1px solid rgba(255,255,255,.08);background:rgba(10,14,26,.58);border-radius:10px;padding:7px 8px;margin:6px 0}
+#page-library .oc-row[draggable="true"]{cursor:grab}
+#page-library .oc-row:active{cursor:grabbing}
+#page-library .oc-row.editing{outline:2px solid rgba(159,231,255,.55)}
+#page-library .oc-row.star{border-color:rgba(255,220,120,.45)}
+#page-library .oc-row-name{font-weight:800;color:#f4f8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#page-library .oc-row-note{color:#aab4c8;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#page-library .oc-row-prompt{font-size:12px;color:#c7d0e4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.9}
+#page-library .oc-row-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+#page-library .oc-row-actions button,#page-library .oc-row-actions select{font-size:12px;padding:4px 7px;max-width:96px}
+#page-library .oc-row details{grid-column:1 / -1;margin-top:2px}
+#page-library .oc-row details textarea{min-height:76px;font-size:12px}
+#page-library .oc-empty-folder{color:#7f8ba3;font-size:12px;padding:8px;text-align:center;border:1px dashed rgba(255,255,255,.1);border-radius:10px}
+@media(max-width:1100px){#page-library .library-layout{grid-template-columns:1fr}#page-library .oc-tools{grid-template-columns:1fr 1fr 1fr}#page-library .oc-row{grid-template-columns:1fr}.oc-row-actions{justify-content:flex-start!important}}
+</style>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#141626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Prompt Lab">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./sw.js").catch(function (err) {
+      console.warn("Service worker registration failed:", err);
+    });
+  });
+}
+</script>
+
+</head><body>
+<header class="app-header"><div><h1>Danbooru Prompt Card Lab</h1><p>随机词汇卡片、拖拽收集、自动排序导出、批量场景生成、OC与画师串保存</p></div><nav class="tabs"><button class="tab active" data-page="page-cards">词汇卡片</button><button class="tab" data-page="page-generator">批量生成</button><button class="tab" data-page="page-library">OC / 画师串</button><button class="tab" data-page="page-pending">待定页</button></nav></header>
+<main>
+<section id="page-cards" class="page active"><section class="toolbar"><div class="toolbar-group"><label>本轮卡片数量 <input id="card-count" type="number" min="8" max="80" value="20"/></label><label>模式 <select id="card-mode"><option value="mixed">混合</option><option value="sfw">偏 SFW</option><option value="nsfw">偏 NSFW</option></select></label><button id="refresh-cards" class="primary">刷新一批</button><button id="clear-picked">清空栏位</button></div><div class="toolbar-group"><span id="tag-source-status" class="status-pill">本地库：10,000 tags</span><button id="export-picked" class="primary">导出 Prompt</button><button id="copy-picked">复制</button></div></section><div class="layout"><section class="card-stage-wrap"><div class="section-title"><h2>随机散落卡片</h2><span>默认 20 张；拖动卡片，点击或拖到右侧收集。</span></div><div id="card-stage" class="card-stage"></div></section><aside class="picked-panel"><div class="section-title"><h2>我的栏位</h2><span>已选 tag 紧凑显示，点击移回盘面。</span></div><div id="picked-groups" class="picked-groups"></div></aside></div><section class="export-panel"><div class="section-title"><h2>导出结果</h2><span>按内置大顺序自动分类排序。</span></div><textarea id="export-output" placeholder="点击导出后，这里会出现排序后的 prompt..."></textarea></section></section>
+<section id="page-generator" class="page"><section class="toolbar"><div class="toolbar-group"><label>批量数量 <input id="batch-count" type="number" min="1" max="50" value="8"/></label><label>场景类型 <select id="batch-mode"><option value="sfw">SFW 场景</option><option value="nsfw">NSFW 场景</option><option value="mixed">混合</option></select></label><label>角色/主体 <input id="batch-character" type="text" placeholder="例如：komeiji koishi, touhou..."/></label><label>交互方 <select id="batch-partner-mode"><option value="pov">POV</option><option value="1boy">1boy</option><option value="2boys">2boys</option><option value="group">3boys+</option></select></label><label>强张力 <select id="batch-tension-mode"><option value="on">开</option><option value="off">关</option></select></label>
+<label>地点层 <select id="batch-location-mode"><option value="off">关闭</option><option value="random" selected>随机</option><option value="custom">指定</option></select></label>
+<label>指定地点 <select id="batch-location-choice"></select></label>
+<label>小道具层 <select id="batch-toy-mode"><option value="off">关闭</option><option value="random">随机</option><option value="custom">指定</option></select></label>
+<label>指定小道具 <select id="batch-toy-choice"></select></label>
+<button id="make-batch" class="primary">随机生成</button></div><div class="toolbar-group"><button id="copy-batch">复制全部</button><button id="download-batch">下载 TXT</button></div></section><section class="batch-panel"><div class="section-title"><h2>批量结果</h2><span>真正随机组合：角色、外观、服装、动作、场景、镜头、构图、光影。</span></div><div id="batch-pool-stats" class="muted" style="margin:8px 0 14px;font-size:12px;line-height:1.5;"></div><div id="batch-results" class="batch-results"></div></section></section>
+<section id="page-library" class="page"><div class="library-layout"><section class="library-panel"><div class="section-title"><h2>OC 列表</h2><span>支持插图、本地长期保存、一键填入第二页。</span></div><div id="oc-edit-banner" class="oc-edit-banner"><span id="oc-edit-text">正在编辑 OC</span><button id="oc-cancel-edit" type="button">取消编辑</button></div><div class="form-grid"><input id="oc-name" placeholder="OC 名称"/><input id="oc-note" placeholder="备注 / 简介"/><textarea id="oc-prompt" placeholder="OC 基础 prompt"></textarea><input id="oc-image" type="file" accept="image/*"/><button id="save-oc" class="primary">保存 OC</button><button id="compress-oc-images" title="压缩已经保存的 OC 插图，避免浏览器本地存储爆掉">压缩已存插图</button></div><div class="oc-tools"><input id="oc-search" placeholder="搜索 OC 名称 / 备注 / prompt"/><select id="oc-sort"><option value="star">星标优先</option><option value="new">最新优先</option><option value="old">最旧优先</option><option value="name">名称排序</option></select><button id="oc-collapse-all">收起全部</button></div><div id="oc-list" class="library-list oc-list"></div></section><section class="library-panel"><div class="section-title"><h2>画师串保存列表</h2><span>长期保存画师串；一键复制。</span></div><div class="form-grid"><input id="artist-name" placeholder="画师串名称"/><input id="artist-note" placeholder="备注"/><textarea id="artist-content" placeholder="画师串内容"></textarea><button id="save-artist" class="primary">保存画师串</button></div><div id="artist-list" class="library-list"></div></section></div></section>
+
+<section id="page-pending" class="page"><div class="pending-layout">
+<section class="library-panel"><div class="section-title"><h2>待定灵感 / Prompt 片段</h2><span>保存临时灵感、短场景、待扩写 prompt；可一键填入第二页。</span></div><div class="form-grid"><input id="pending-title" placeholder="标题 / 关键词"/><textarea id="pending-content" placeholder="待定内容、灵感、短 prompt"></textarea><button id="save-pending" class="primary">保存待定</button></div><div id="pending-list" class="library-list compact-list"></div></section>
+<section class="library-panel"><div class="section-title"><h2>组合草稿器 / 长度检查</h2><span>把画师串、OC、场景段拼起来，并检查 tag 数与字符数。</span></div><div class="form-grid"><textarea id="compose-artist" placeholder="画师串 / 质量词"></textarea><textarea id="compose-oc" placeholder="OC 基础 prompt"></textarea><textarea id="compose-scene" placeholder="第二页场景 / 额外内容"></textarea><button id="compose-run" class="primary">组合并统计</button><button id="compose-copy">复制组合结果</button></div><div id="compose-stats" class="muted"></div><textarea id="compose-output" placeholder="组合后的 prompt 会出现在这里"></textarea></section>
+<section class="library-panel"><div class="section-title"><h2>负面词 / 附加词预设</h2><span>保存常用 negative prompt、修图补词、画风尾缀等。</span></div><div class="form-grid"><input id="preset-name" placeholder="预设名称"/><textarea id="preset-content" placeholder="预设内容"></textarea><button id="save-preset" class="primary">保存预设</button></div><div id="preset-list" class="library-list compact-list"></div></section>
+</div></section>
+</main><div id="toast" class="toast"></div><script src="./tags.js"></script><script src="./app.js"></script></body></html>
