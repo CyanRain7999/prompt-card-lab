@@ -365,3 +365,10 @@
 - PWA 显示方向改为 `portrait-primary`，用于减少手机安装后自动横竖屏乱转。
 - Service Worker 缓存版本已更新，避免旧 PWA 缓存继续使用旧 manifest。
 - 注意：手机上已经“添加到主屏幕”的旧 PWA 可能仍缓存旧 manifest，需要删除桌面图标后重新添加一次。
+
+## v1.10.2 更新
+
+- 增加手机横屏防护层。
+- 手机横屏且高度较低时，会显示“请竖屏使用”遮罩，避免界面被横屏拉坏。
+- 继续保留 PWA `orientation: portrait-primary`。
+- 更新 service worker cache name，部署后会触发新缓存。

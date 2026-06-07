@@ -10,3 +10,71 @@
   .batch-item textarea { min-height: 160px; }
   .library-card, .oc-card, .folder-card { touch-action: manipulation; }
 }
+
+
+/* v1.10.2 mobile landscape guard */
+#landscape-blocker { display: none; }
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 620px) {
+  html, body {
+    overflow: hidden !important;
+    width: 100vw !important;
+    height: 100vh !important;
+  }
+
+  body > *:not(#landscape-blocker) {
+    filter: blur(3px) brightness(0.55);
+    pointer-events: none !important;
+    user-select: none !important;
+  }
+
+  #landscape-blocker {
+    display: flex !important;
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(126, 210, 235, 0.18), transparent 32%),
+      linear-gradient(135deg, rgba(16, 18, 29, 0.94), rgba(26, 19, 43, 0.96));
+    color: #eef7ff;
+    text-align: center;
+  }
+
+  #landscape-blocker .landscape-card {
+    width: min(520px, 86vw);
+    border: 1px solid rgba(159, 231, 255, 0.38);
+    border-radius: 22px;
+    background: rgba(26, 30, 48, 0.92);
+    box-shadow: 0 20px 80px rgba(0, 0, 0, 0.45);
+    padding: 28px 30px;
+  }
+
+  #landscape-blocker .landscape-icon {
+    width: 70px;
+    height: 70px;
+    margin: 0 auto 14px;
+    border-radius: 24px;
+    display: grid;
+    place-items: center;
+    font-size: 46px;
+    color: #9fe7ff;
+    background: rgba(159, 231, 255, 0.10);
+    border: 1px solid rgba(159, 231, 255, 0.30);
+  }
+
+  #landscape-blocker .landscape-title {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+  }
+
+  #landscape-blocker .landscape-text {
+    font-size: 16px;
+    line-height: 1.65;
+    color: rgba(238, 247, 255, 0.82);
+  }
+}
