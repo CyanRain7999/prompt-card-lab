@@ -358,3 +358,10 @@
 - 适合部署到 GitHub Pages 后添加到手机主屏幕。
 - 增加 `GITHUB_PAGES_PWA_GUIDE.md` 部署说明。
 - 增加少量手机端布局优化。
+
+
+## v1.10.1 更新
+
+- PWA 显示方向改为 `portrait-primary`，用于减少手机安装后自动横竖屏乱转。
+- Service Worker 缓存版本已更新，避免旧 PWA 缓存继续使用旧 manifest。
+- 注意：手机上已经“添加到主屏幕”的旧 PWA 可能仍缓存旧 manifest，需要删除桌面图标后重新添加一次。
