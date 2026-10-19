@@ -1,5 +1,12 @@
-const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));let picked=[],zCounter=10,currentCards=[],categoryDebt=Object.fromEntries(CATEGORY_ORDER.map(c=>[c,1])),recentTags=[];const activeTags=[...TAGS];const colorMap={quality:205,rating:330,character:260,species:120,body:15,hair:45,eyes:170,face:300,expression:25,clothing:220,accessory:285,pose:190,action_sfw:95,action_nsfw:345,camera:200,composition:240,lighting:55,background:160,effects:35,after:10,negative:0,danbooru_general:270,nsfw_general:320};function toast(m){const e=$("#toast");e.textContent=m;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),1600)}function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
-function pickOne(a){return a[Math.floor(Math.random()*a.length)]}function key(i){return `${i.cat}::${i.tag}`}function isPicked(i){return picked.some(p=>key(p)===key(i))}function poolByMode(m){if(m==="mixed")return activeTags;if(m==="sfw")return activeTags.filter(t=>t.mode==="sfw"||t.mode==="mixed"||t.cat==="negative");if(m==="nsfw")return activeTags.filter(t=>t.mode==="nsfw"||t.mode==="mixed"||t.cat==="negative");return activeTags}function weightedCategory(m){const cats=CATEGORY_ORDER.filter(c=>poolByMode(m).some(t=>t.cat===c));const w=cats.map(c=>{let base=c==="negative"?.65:c==="quality"?.75:c==="danbooru_general"?.35:1;return base*Math.max(.15,categoryDebt[c]||1)});let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<cats.length;i++){r-=w[i];if(r<=0)return cats[i]}return cats[0]}function getPoolForCat(cat,mode,seen){let p=poolByMode(mode).filter(t=>t.cat===cat&&!seen.has(t.tag)&&!recentTags.includes(t.tag));if(!p.length)p=poolByMode(mode).filter(t=>t.cat===cat&&!seen.has(t.tag));return p}function generateCards(){const st=$("#card-stage"),cnt=Math.max(8,Math.min(80,Number($("#card-count").value||20))),mode=$("#card-mode").value,chosen=[],seen=new Set(),appeared=new Set();let guaranteed=["quality","hair","eyes","expression","clothing","pose","camera","composition","lighting","background","negative"];if(mode==="sfw")guaranteed.push("action_sfw");else if(mode==="nsfw")guaranteed.push("action_nsfw","rating");else guaranteed.push("action_sfw","action_nsfw","rating");for(const cat of guaranteed){if(chosen.length>=cnt)break;const pool=getPoolForCat(cat,mode,seen);if(pool.length){const item=pickOne(pool);chosen.push(item);seen.add(item.tag);appeared.add(item.cat)}}while(chosen.length<cnt){let cat=weightedCategory(mode),pool=getPoolForCat(cat,mode,seen);if(!pool.length)pool=poolByMode(mode).filter(t=>!seen.has(t.tag)&&!recentTags.includes(t.tag));if(!pool.length)pool=poolByMode(mode).filter(t=>!seen.has(t.tag));const item=pickOne(pool);if(!item)break;chosen.push(item);seen.add(item.tag);appeared.add(item.cat)}CATEGORY_ORDER.forEach(c=>{if(appeared.has(c))categoryDebt[c]=1;else categoryDebt[c]=Math.min(5,(categoryDebt[c]||1)+.45)});recentTags=[...chosen.map(x=>x.tag),...recentTags].slice(0,260);const w=st.clientWidth||1000,h=st.clientHeight||520;currentCards=chosen.map((it,i)=>({...it,id:key(it),x:Math.max(8,Math.random()*(w-240)),y:Math.max(8,Math.random()*(h-88)),rot:Number((Math.random()*30-15).toFixed(1)),hue:(colorMap[it.cat]??Math.floor(Math.random()*360))+Math.random()*28-14,z:i+1}));renderStage()}function fillCard(card,it){card.innerHTML="";let en=document.createElement("div");en.className="tag-en";en.textContent=it.tag;let zh=document.createElement("div");zh.className="tag-zh";zh.textContent=it.zh||"未翻译";let meta=document.createElement("div");meta.className="tag-meta";meta.textContent=`${CATEGORY_LABEL[it.cat]||it.cat}${it.count?" · "+Number(it.count).toLocaleString():""}`;card.append(en,zh,meta)}function renderStage(){const st=$("#card-stage");st.innerHTML="";currentCards.filter(it=>!isPicked(it)).forEach(it=>{const c=document.createElement("div");c.className="tag-card";fillCard(c,it);c.style.left=it.x+"px";c.style.top=it.y+"px";c.style.zIndex=String(it.z||1);c.style.setProperty("--rot",`${it.rot||0}deg`);c.style.setProperty("--hue",`${it.hue||220}`);installDrag(c,it);st.appendChild(c)})}function installDrag(card,it){let sx=0,sy=0,ox=0,oy=0,moved=false,drag=false;card.addEventListener("mouseenter",()=>{it.z=++zCounter;card.style.zIndex=String(it.z)});card.addEventListener("pointerdown",e=>{e.preventDefault();drag=true;moved=false;sx=e.clientX;sy=e.clientY;ox=it.x;oy=it.y;it.homeX=ox;it.homeY=oy;it.z=++zCounter;card.style.zIndex=String(it.z);card.classList.add("dragging");card.setPointerCapture(e.pointerId)});card.addEventListener("pointermove",e=>{if(!drag)return;let dx=e.clientX-sx,dy=e.clientY-sy;if(Math.abs(dx)+Math.abs(dy)>4)moved=true;it.x=ox+dx;it.y=oy+dy;card.style.left=it.x+"px";card.style.top=it.y+"px";card.style.setProperty("--rot","0deg")});card.addEventListener("pointerup",e=>{if(!drag)return;drag=false;card.classList.remove("dragging");try{card.releasePointerCapture(e.pointerId)}catch{}const p=$(".picked-panel").getBoundingClientRect(),drop=e.clientX>=p.left&&e.clientX<=p.right&&e.clientY>=p.top&&e.clientY<=p.bottom;if(!moved||drop){addPicked(it);return}const st=$("#card-stage"),mx=Math.max(8,st.clientWidth-card.offsetWidth-8),my=Math.max(8,st.clientHeight-card.offsetHeight-8);it.x=Math.min(mx,Math.max(8,it.x));it.y=Math.min(my,Math.max(8,it.y));it.rot=Number((Math.random()*24-12).toFixed(1));card.style.left=it.x+"px";card.style.top=it.y+"px";card.style.setProperty("--rot",`${it.rot}deg`)})}function clampToStagePos(x,y){
+const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));let picked=[],zCounter=10,currentCards=[],categoryDebt=Object.fromEntries(CATEGORY_ORDER.map(c=>[c,1])),recentTags=(()=>{try{const a=JSON.parse(localStorage.getItem("dpcl_recent_tags")||"[]");return Array.isArray(a)?a:[]}catch(e){return[]}})();const activeTags=[...TAGS];const colorMap={quality:205,rating:330,character:260,species:120,body:15,hair:45,eyes:170,face:300,expression:25,clothing:220,accessory:285,pose:190,action_sfw:95,action_nsfw:345,camera:200,composition:240,lighting:55,background:160,effects:35,after:10,negative:0,danbooru_general:270,nsfw_general:320};function toast(m){const e=$("#toast");e.textContent=m;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),1600)}function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+function pickOne(a){
+ if(!a||!a.length) return undefined;
+ if(typeof window.__dpclPickWeighted==="function") return window.__dpclPickWeighted(a);
+ return a[Math.floor(Math.random()*a.length)];
+}function key(i){return `${i.cat}::${i.tag}`}function isPicked(i){return picked.some(p=>key(p)===key(i))}function poolByMode(m){if(m==="mixed")return activeTags;if(m==="sfw")return activeTags.filter(t=>t.mode==="sfw"||t.mode==="mixed"||t.cat==="negative");if(m==="nsfw")return activeTags.filter(t=>t.mode==="nsfw"||t.mode==="mixed"||t.cat==="negative");return activeTags}function weightedCategory(m){const cats=CATEGORY_ORDER.filter(c=>poolByMode(m).some(t=>t.cat===c));const w=cats.map(c=>{let base=c==="negative"?.65:c==="quality"?.75:c==="danbooru_general"?.35:1;return base*Math.max(.15,categoryDebt[c]||1)});let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<cats.length;i++){r-=w[i];if(r<=0)return cats[i]}return cats[0]}function getPoolForCat(cat,mode,seen){let p=poolByMode(mode).filter(t=>t.cat===cat&&!seen.has(t.tag)&&!recentTags.includes(t.tag));if(!p.length)p=poolByMode(mode).filter(t=>t.cat===cat&&!seen.has(t.tag));return p}function generateCards(){const st=$("#card-stage"),cnt=Math.max(8,Math.min(80,Number($("#card-count").value||20))),mode=$("#card-mode").value,chosen=[],seen=new Set(),appeared=new Set();let guaranteed=["quality","hair","eyes","expression","clothing","pose","camera","composition","lighting","background","negative"];if(mode==="sfw")guaranteed.push("action_sfw");else if(mode==="nsfw")guaranteed.push("action_nsfw","rating");else guaranteed.push("action_sfw","action_nsfw","rating");for(const cat of guaranteed){if(chosen.length>=cnt)break;const pool=getPoolForCat(cat,mode,seen);if(pool.length){const item=pickOne(pool);chosen.push(item);seen.add(item.tag);appeared.add(item.cat)}}while(chosen.length<cnt){let cat=weightedCategory(mode),pool=getPoolForCat(cat,mode,seen);if(!pool.length)pool=poolByMode(mode).filter(t=>!seen.has(t.tag)&&!recentTags.includes(t.tag));if(!pool.length)pool=poolByMode(mode).filter(t=>!seen.has(t.tag));const item=pickOne(pool);if(!item)break;chosen.push(item);seen.add(item.tag);appeared.add(item.cat)}CATEGORY_ORDER.forEach(c=>{if(appeared.has(c))categoryDebt[c]=1;else categoryDebt[c]=Math.min(5,(categoryDebt[c]||1)+.45)});recentTags=[...chosen.map(x=>x.tag),...recentTags].slice(0,260);
+ try{localStorage.setItem("dpcl_recent_tags",JSON.stringify(recentTags))}catch(e){}
+ window.__dpclRecentTags=recentTags.slice();
+ window.__dpclRecentSet=new Set(recentTags.map(x=>String(x).toLowerCase()));const w=st.clientWidth||1000,h=st.clientHeight||520;currentCards=chosen.map((it,i)=>({...it,id:key(it),x:Math.max(8,Math.random()*(w-240)),y:Math.max(8,Math.random()*(h-88)),rot:Number((Math.random()*30-15).toFixed(1)),hue:(colorMap[it.cat]??Math.floor(Math.random()*360))+Math.random()*28-14,z:i+1}));renderStage()}function fillCard(card,it){card.innerHTML="";let en=document.createElement("div");en.className="tag-en";en.textContent=it.tag;let zh=document.createElement("div");zh.className="tag-zh";zh.textContent=it.zh||"未翻译";let meta=document.createElement("div");meta.className="tag-meta";meta.textContent=`${CATEGORY_LABEL[it.cat]||it.cat}${it.count?" · "+Number(it.count).toLocaleString():""}`;card.append(en,zh,meta)}function renderStage(){const st=$("#card-stage");st.innerHTML="";currentCards.filter(it=>!isPicked(it)).forEach(it=>{const c=document.createElement("div");c.className="tag-card";fillCard(c,it);c.style.left=it.x+"px";c.style.top=it.y+"px";c.style.zIndex=String(it.z||1);c.style.setProperty("--rot",`${it.rot||0}deg`);c.style.setProperty("--hue",`${it.hue||220}`);installDrag(c,it);st.appendChild(c)})}function installDrag(card,it){let sx=0,sy=0,ox=0,oy=0,moved=false,drag=false;card.addEventListener("mouseenter",()=>{it.z=++zCounter;card.style.zIndex=String(it.z)});card.addEventListener("pointerdown",e=>{e.preventDefault();drag=true;moved=false;sx=e.clientX;sy=e.clientY;ox=it.x;oy=it.y;it.homeX=ox;it.homeY=oy;it.z=++zCounter;card.style.zIndex=String(it.z);card.classList.add("dragging");card.setPointerCapture(e.pointerId)});card.addEventListener("pointermove",e=>{if(!drag)return;let dx=e.clientX-sx,dy=e.clientY-sy;if(Math.abs(dx)+Math.abs(dy)>4)moved=true;it.x=ox+dx;it.y=oy+dy;card.style.left=it.x+"px";card.style.top=it.y+"px";card.style.setProperty("--rot","0deg")});card.addEventListener("pointerup",e=>{if(!drag)return;drag=false;card.classList.remove("dragging");try{card.releasePointerCapture(e.pointerId)}catch{}const p=$(".picked-panel").getBoundingClientRect(),drop=e.clientX>=p.left&&e.clientX<=p.right&&e.clientY>=p.top&&e.clientY<=p.bottom;if(!moved||drop){addPicked(it);return}const st=$("#card-stage"),mx=Math.max(8,st.clientWidth-card.offsetWidth-8),my=Math.max(8,st.clientHeight-card.offsetHeight-8);it.x=Math.min(mx,Math.max(8,it.x));it.y=Math.min(my,Math.max(8,it.y));it.rot=Number((Math.random()*24-12).toFixed(1));card.style.left=it.x+"px";card.style.top=it.y+"px";card.style.setProperty("--rot",`${it.rot}deg`)})}function clampToStagePos(x,y){
  const st=$("#card-stage");
  const maxX=Math.max(8,(st?.clientWidth||900)-240);
  const maxY=Math.max(8,(st?.clientHeight||520)-88);
@@ -787,7 +794,9 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
   function pick(pool, used){
     const candidates = pool.filter(x=>!used.has(norm(x.tag || x)));
     const arr = candidates.length ? candidates : pool;
-    const v = arr[Math.floor(Math.random()*arr.length)];
+    const v = (typeof window.__dpclPickWeighted==="function")
+      ? window.__dpclPickWeighted(arr, x=>{const raw=String(x.tag||x);return [norm(raw)].concat(raw.split(",").map(s=>norm(s)))})
+      : arr[Math.floor(Math.random()*arr.length)];
     used.add(norm(v.tag || v));
     return v;
   }
@@ -1192,7 +1201,7 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
   }
 
   let CACHE=null;
-  let NSFW_RECENT=[];
+  let NSFW_RECENT=(()=>{try{const a=JSON.parse(localStorage.getItem("dpcl_recent_cores")||"[]");return Array.isArray(a)?a:[]}catch(e){return[]}})();
   function buildPools(){
     if(CACHE) return CACHE;
     const raw = (typeof activeTags !== "undefined" && Array.isArray(activeTags)) ? activeTags : [];
@@ -1311,7 +1320,9 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
       for (let i = 0; i < count; i++){
         const avail = pool.filter(x => !used.has(norm(x)));
         if (!avail.length) break;
-        const v = avail[Math.floor(Math.random() * avail.length)];
+        const v = (typeof window.__dpclPickWeighted==="function")
+          ? window.__dpclPickWeighted(avail)
+          : avail[Math.floor(Math.random() * avail.length)];
         used.add(norm(v));
         out.push(v);
       }
@@ -1355,6 +1366,7 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
       const nsfwPool=freshPool.length?freshPool:basePool;
       actionCore=pick(nsfwPool.length?nsfwPool:NSFW_CORES,u);
       NSFW_RECENT=[actionCore.tag,...NSFW_RECENT].slice(0,120);
+      try{localStorage.setItem("dpcl_recent_cores",JSON.stringify(NSFW_RECENT))}catch(e){}
       action=[...splitAction(actionCore), ...context];
     }
 
@@ -2189,4 +2201,658 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',install199); else install199();
   setTimeout(install199,500);
+})();
+
+
+/* ===== v2.3 prompt tools: stars, budget, lint, backup ===== */
+(function(){
+  const q=(s,r=document)=>r.querySelector(s);
+  const qa=(s,r=document)=>Array.from(r.querySelectorAll(s));
+  const BUDGET_KEY="dpcl_prompt_budget";
+  const STAR_KEY="dpcl_starred_prompts";
+  const TAG_CAT=new Map((typeof TAGS!=="undefined"?TAGS:[]).map(t=>[t.tag,t.cat]));
+  const COLORS=["black","brown","blonde","white","silver","grey","blue","red","pink","purple","green","orange","aqua"];
+  const TENSION=new Set(["extreme perspective","strong foreshortening","dynamic composition","high visual tension","dutch angle","motion lines","lively movement"]);
+  const SECONDARY_LOCK=new Set(["visible pussy","spread pussy","visible penis","erect penis","penis insertion","genital focus","explicit genitalia","uncensored genitals","anus","visible anus","penis inside anus","mouth contact"]);
+  const DROP_GUARD=new Set(["no crowd","no extra characters","no multiple girls","only one boy","only two boys","no extra girls","only one girl"]);
+
+  function readJSON(k,def){
+    try{ const v=JSON.parse(localStorage.getItem(k)||"null"); return v==null?def:v; }
+    catch(e){ return def; }
+  }
+  function writeJSON(k,v){
+    try{ localStorage.setItem(k,JSON.stringify(v)); return true; }
+    catch(e){ if(typeof toast==="function") toast("本地存储空间不足，操作未保存"); return false; }
+  }
+  function getBudget(){ const n=Number(localStorage.getItem(BUDGET_KEY)||0); return Number.isFinite(n)?n:0; }
+  function setBudget(n){ try{ localStorage.setItem(BUDGET_KEY,String(n||0)); }catch(e){} }
+  function norm(s){ return String(s||"").trim().toLowerCase(); }
+  function splitTags(p){ return String(p||"").split(",").map(s=>s.trim()).filter(Boolean); }
+  function uniqTags(arr){
+    const seen=new Set(),out=[];
+    for(const t of arr){ const k=norm(t); if(!k||seen.has(k)) continue; seen.add(k); out.push(t); }
+    return out;
+  }
+  function filterCat(tags,cat,keep){
+    let seen=0;
+    return tags.filter(t=>{
+      if(TAG_CAT.get(norm(t))===cat){ seen++; return seen<=keep; }
+      return true;
+    });
+  }
+  function trimPrompt(prompt,target){
+    if(!target) return {text:prompt,removed:0};
+    let tags=splitTags(prompt);
+    const before=tags.length;
+    if(tags.length<=target) return {text:tags.join(", "),removed:0};
+    const nsfwKeep=target>=40?1:0;
+    const steps=[
+      ["nsfw_general",nsfwKeep],["background",1],["camera",1],["composition",1],["lighting",1],["effects",1],
+      ["accessory",1],["clothing",1],["expression",2],["hair",2],["eyes",1],["body",1],["face",1],["quality",3]
+    ];
+    for(const step of steps){
+      if(tags.length<=target) break;
+      tags=filterCat(tags,step[0],step[1]);
+    }
+    if(tags.length>target){
+      let seen=0;
+      tags=tags.filter(t=>{
+        if(TENSION.has(norm(t))){ seen++; return seen<=2; }
+        return true;
+      });
+    }
+    if(tags.length>target){
+      for(let i=tags.length-1;i>=0&&tags.length>target;i--){
+        if(DROP_GUARD.has(norm(tags[i]))) tags.splice(i,1);
+      }
+    }
+    if(tags.length>target){
+      for(let i=tags.length-1;i>=0&&tags.length>target;i--){
+        if(SECONDARY_LOCK.has(norm(tags[i]))) tags.splice(i,1);
+      }
+    }
+    tags=uniqTags(tags);
+    return {text:tags.join(", "),removed:before-tags.length};
+  }
+  function applyBudgetAll(){
+    const target=getBudget();
+    qa(".batch-item").forEach(card=>{
+      const ta=card.querySelector("textarea"); if(!ta) return;
+      const res=trimPrompt(ta.value,target);
+      if(res.text!==ta.value) ta.value=res.text;
+      card.dataset.budgetRemoved=String(res.removed);
+    });
+  }
+
+  function getStars(){ const v=readJSON(STAR_KEY,[]); return Array.isArray(v)?v:[]; }
+  function isStarred(prompt){ const p=String(prompt||"").trim(); return !!p && getStars().some(x=>x.prompt===p); }
+  function toggleStar(card){
+    const ta=card.querySelector("textarea"); if(!ta) return;
+    const prompt=ta.value.trim(); if(!prompt) return;
+    let list=getStars();
+    const idx=list.findIndex(x=>x.prompt===prompt);
+    if(idx>=0){
+      list.splice(idx,1);
+      if(!writeJSON(STAR_KEY,list)) return;
+      if(typeof toast==="function") toast("已取消收藏 Prompt");
+    }else{
+      list.unshift({
+        id:"sp_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
+        title:(card.querySelector("h3")?card.querySelector("h3").textContent:"Prompt"),
+        summary:(card.querySelector(".summary")?card.querySelector(".summary").innerText:""),
+        prompt:prompt,
+        starredAt:Date.now()
+      });
+      if(!writeJSON(STAR_KEY,list)) return;
+      if(typeof toast==="function") toast("已收藏 Prompt");
+    }
+    renderStarred(); updateStarButtons(); updateBackupStatus();
+  }
+  function renderStarred(){
+    const wrap=q("#starred-list"); const count=q("#starred-count");
+    const list=getStars();
+    if(count) count.textContent=list.length+" 条";
+    if(!wrap) return;
+    wrap.innerHTML="";
+    if(!list.length){
+      wrap.innerHTML='<div class="empty">还没有收藏 Prompt。在批量结果里点“☆ 收藏”。</div>';
+      return;
+    }
+    list.forEach(item=>{
+      const d=document.createElement("div");
+      d.className="library-card";
+      d.innerHTML="<h3>"+escapeHtml(item.title||"Prompt")+"</h3><p>"+escapeHtml(item.summary||"")+"</p><textarea readonly>"+escapeHtml(item.prompt||"")+"</textarea><div class=\"library-actions\"><button data-copy>复制</button><button data-del>删除</button></div>";
+      d.querySelector("[data-copy]").onclick=()=>{ if(typeof copyText==="function") copyText(item.prompt); };
+      d.querySelector("[data-del]").onclick=()=>{
+        const next=getStars().filter(x=>x.id!==item.id);
+        if(!writeJSON(STAR_KEY,next)) return;
+        renderStarred(); updateStarButtons(); updateBackupStatus();
+        if(typeof toast==="function") toast("已删除收藏");
+      };
+      wrap.appendChild(d);
+    });
+  }
+  function updateStarButtons(){
+    qa(".batch-item").forEach(card=>{
+      const btn=card.querySelector(".star-one"); const ta=card.querySelector("textarea");
+      if(!btn||!ta) return;
+      const active=isStarred(ta.value);
+      btn.textContent=active?"★ 已收藏":"☆ 收藏";
+      btn.classList.toggle("active",active);
+    });
+  }
+  function addStarButton(card){
+    if(card.querySelector(".star-one")) return;
+    const copy=card.querySelector(".copy-one");
+    const btn=document.createElement("button");
+    btn.type="button"; btn.className="star-one"; btn.textContent="☆ 收藏";
+    if(copy) copy.insertAdjacentElement("afterend",btn); else card.appendChild(btn);
+    btn.onclick=()=>toggleStar(card);
+  }
+
+  function lintPrompt(prompt){
+    const tags=splitTags(prompt);
+    const lower=tags.map(norm);
+    const warns=[];
+    if(!tags.length) warns.push("空 prompt");
+    if(tags.indexOf("undefined")>=0) warns.push("包含 undefined");
+    const seen=new Set(),dups=[];
+    for(const t of tags){ const k=norm(t); if(seen.has(k)) dups.push(t); else seen.add(k); }
+    if(dups.length) warns.push("重复 tag："+dups.slice(0,3).join(" / "));
+    const multi=/group sex|spitroast|double penetration|bukkake|threesome|multiple boys|gangbang|surrounded by men/;
+    if(lower.indexOf("solo")>=0 && lower.some(t=>multi.test(t))) warns.push("solo 与多人动作冲突");
+    if(lower.indexOf("1boy")>=0 && lower.some(t=>/spitroast|double penetration|bukkake|threesome|gangbang|multiple boys|group sex/.test(t))) warns.push("1boy 与多男动作冲突");
+    if(/explicit|uncensored|nsfw/.test(String(prompt).toLowerCase()) && lower.indexOf("adult woman")<0) warns.push("NSFW 缺少 adult woman");
+    const hairColors=tags.filter(t=>TAG_CAT.get(norm(t))==="hair" && COLORS.some(c=>norm(t).startsWith(c+" "))).map(t=>norm(t).split(" ")[0]);
+    if(new Set(hairColors).size>1) warns.push("双发色："+Array.from(new Set(hairColors)).join(" / "));
+    const clothes=tags.filter(t=>TAG_CAT.get(norm(t))==="clothing").length;
+    if(clothes>1) warns.push("多套服装");
+    const low=String(prompt).toLowerCase();
+    const standing=/standing sex|standing position|standing doggystyle|standing split|against wall|against window|wall sex|shower|bathtub/.test(low);
+    const seated=/on chair|chair sex|on sofa|sofa sex|on bed edge|bed edge sex|on floor|floor sex|on lap|sitting on partner lap|inside car|car sex/.test(low);
+    if(standing&&seated) warns.push("站位与家具/地面地点冲突");
+    const budget=getBudget();
+    if(budget&&tags.length>budget) warns.push("超出预算 "+tags.length+"/"+budget);
+    return warns;
+  }
+  function updateCard(card){
+    const ta=card.querySelector("textarea"); if(!ta) return;
+    const tags=splitTags(ta.value);
+    const target=getBudget();
+    const chars=ta.value.length;
+    const tokens=Math.ceil(chars/4);
+    let meta=card.querySelector(".batch-meta");
+    if(!meta){
+      meta=document.createElement("div"); meta.className="batch-meta";
+      const summary=card.querySelector(".summary");
+      (summary||ta).insertAdjacentElement("afterend",meta);
+    }
+    meta.innerHTML="<span>"+tags.length+" tags</span><span>"+chars+" chars</span><span>≈"+tokens+" tokens</span><span class=\""+(target&&tags.length>target?"over":"")+"\">"+(target?"预算 "+tags.length+"/"+target:"不限长度")+"</span>";
+    let lint=card.querySelector(".batch-lint");
+    if(!lint){ lint=document.createElement("div"); lint.className="batch-lint"; meta.insertAdjacentElement("afterend",lint); }
+    const warns=lintPrompt(ta.value);
+    lint.className="batch-lint"+(warns.length?" warn":"");
+    lint.textContent=warns.length?("⚠ "+warns.join(" · ")):"✓ 质检通过";
+  }
+  function updateQualitySummary(){
+    const cards=qa(".batch-item");
+    const warn=cards.filter(c=>c.querySelector(".batch-lint.warn")).length;
+    const el=q("#batch-quality-summary");
+    if(el) el.textContent=cards.length?("质检："+(cards.length-warn)+" 条通过 · "+warn+" 条需注意"):"";
+  }
+  function decorateBatch(){
+    applyBudgetAll();
+    qa(".batch-item").forEach(card=>{ addStarButton(card); updateCard(card); });
+    updateStarButtons();
+    updateQualitySummary();
+  }
+
+  function collectData(){
+    const data={};
+    Object.keys(localStorage).filter(k=>k.indexOf("dpcl_")===0).sort().forEach(k=>{ data[k]=localStorage.getItem(k); });
+    return data;
+  }
+  function updateBackupStatus(){
+    const data=collectData();
+    const keys=Object.keys(data);
+    const bytes=Object.values(data).reduce((n,v)=>n+String(v||"").length,0);
+    const el=q("#backup-status");
+    if(el) el.textContent="当前本地数据："+keys.length+" 项，约 "+(bytes/1024).toFixed(1)+" KB";
+  }
+  function exportAllData(){
+    const payload={app:"prompt-card-lab",version:1,exportedAt:new Date().toISOString(),data:collectData()};
+    const name="prompt-card-lab-backup-"+new Date().toISOString().slice(0,10)+".json";
+    if(typeof downloadText==="function") downloadText(name,JSON.stringify(payload,null,2));
+    if(typeof toast==="function") toast("已导出 "+Object.keys(payload.data).length+" 项本地数据");
+    updateBackupStatus();
+  }
+  function readText(file){
+    if(file.text) return file.text();
+    return new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res(r.result);
+      r.onerror=rej;
+      r.readAsText(file);
+    });
+  }
+  async function importData(file){
+    try{
+      const text=await readText(file);
+      const obj=JSON.parse(text);
+      if(!obj||obj.app!=="prompt-card-lab"||!obj.data||typeof obj.data!=="object") throw new Error("不是 Prompt Card Lab 备份文件");
+      const entries=Object.entries(obj.data).filter(x=>x[0].indexOf("dpcl_")===0 && typeof x[1]==="string");
+      if(!entries.length) throw new Error("备份里没有可导入的数据");
+      if(!confirm("导入 "+entries.length+" 项数据，会覆盖当前浏览器里的本地数据。继续？")) return;
+      const old={};
+      Object.keys(localStorage).filter(k=>k.indexOf("dpcl_")===0).forEach(k=>{ old[k]=localStorage.getItem(k); });
+      try{
+        Object.keys(localStorage).filter(k=>k.indexOf("dpcl_")===0).forEach(k=>localStorage.removeItem(k));
+        for(const pair of entries) localStorage.setItem(pair[0],pair[1]);
+        if(typeof toast==="function") toast("导入成功："+entries.length+" 项，正在刷新…");
+        setTimeout(()=>location.reload(),600);
+      }catch(e){
+        Object.keys(localStorage).filter(k=>k.indexOf("dpcl_")===0).forEach(k=>localStorage.removeItem(k));
+        Object.entries(old).forEach(pair=>localStorage.setItem(pair[0],pair[1]));
+        throw e;
+      }
+    }catch(e){
+      if(typeof toast==="function") toast("导入失败："+(e&&e.message?e.message:"文件损坏或空间不足"));
+    }
+  }
+
+  window.__dpclTools={ lintPrompt, trimPrompt, getBudget, updateCard, updateQualitySummary, updateStarButtons, decorateBatch, getStars, renderStarred, applyBudgetAll };
+
+  function wrapRender(){
+    const old=window.renderBatch;
+    if(typeof old==="function" && !old.__v23tools){
+      const wrapped=function(){
+        old.apply(this,arguments);
+        setTimeout(decorateBatch,0);
+        setTimeout(decorateBatch,180);
+        setTimeout(decorateBatch,320);
+      };
+      wrapped.__v23tools=true;
+      window.renderBatch=wrapped;
+    }
+    const btn=q("#make-batch");
+    if(btn) btn.onclick=window.renderBatch;
+  }
+  function install(){
+    wrapRender();
+    const sel=q("#prompt-budget");
+    if(sel){
+      const b=getBudget();
+      sel.value=String(b);
+      if(sel.value!==String(b)) sel.value="0";
+      sel.onchange=()=>{ setBudget(Number(sel.value)||0); applyBudgetAll(); decorateBatch(); updateBackupStatus(); };
+    }
+    const exp=q("#backup-export"); if(exp) exp.onclick=exportAllData;
+    const imp=q("#backup-import"), file=q("#backup-file");
+    if(imp&&file){
+      imp.onclick=()=>file.click();
+      file.onchange=async()=>{
+        const f=file.files&&file.files[0];
+        file.value="";
+        if(f) await importData(f);
+      };
+    }
+    renderStarred();
+    updateBackupStatus();
+    decorateBatch();
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",install);
+  else install();
+})();
+
+
+/* ===== v2.4 repair, refine, chips, hybrid, tag feedback, freshness ===== */
+(function(){
+  const q=(s,r=document)=>r.querySelector(s);
+  const qa=(s,r=document)=>Array.from(r.querySelectorAll(s));
+  const T=window.__dpclTools||{};
+  const FEEDBACK_KEY="dpcl_tag_feedback";
+  const TAGS_SAFE=(typeof TAGS!=="undefined"?TAGS:[]);
+  const TAG_MAP=new Map(TAGS_SAFE.map(t=>[t.tag,t]));
+  const TAG_CAT=new Map(TAGS_SAFE.map(t=>[t.tag,t.cat]));
+  const CAT_LABEL=(typeof CATEGORY_LABEL!=="undefined"?CATEGORY_LABEL:{});
+  const COLORS=["black","brown","blonde","white","silver","grey","blue","red","pink","purple","green","orange","aqua"];
+  function readJSON(k,def){ try{ const v=JSON.parse(localStorage.getItem(k)||"null"); return v==null?def:v; }catch(e){ return def; } }
+  function writeJSON(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ if(typeof toast==="function") toast("本地存储空间不足"); return false; } }
+  function norm(s){ return String(s||"").trim().toLowerCase(); }
+  function splitTags(p){ return String(p||"").split(",").map(s=>s.trim()).filter(Boolean); }
+  function uniqTags(arr){ const seen=new Set(),out=[]; for(const t of arr){ const k=norm(t); if(!k||seen.has(k)) continue; seen.add(k); out.push(t); } return out; }
+
+  function weightedPick(arr,keyOf){
+    if(!arr||!arr.length) return undefined;
+    const fb=window.__dpclTagFeedback||{};
+    const rs=window.__dpclRecentSet||new Set();
+    const keySets=arr.map(x=>{
+      const raw=keyOf?keyOf(x):(x&&x.tag||x);
+      const list=Array.isArray(raw)?raw:[raw];
+      return list.map(s=>String(s||"").toLowerCase()).filter(Boolean);
+    });
+    const ws=keySets.map(ks=>{
+      let w=1, pos=false, neg=false;
+      for(const k of ks){ const f=Number(fb[k]||0); if(f>0) pos=true; else if(f<0) neg=true; }
+      if(pos) w*=2.5;
+      if(neg) w*=0.35;
+      if(ks.length && rs.has(ks[0])) w*=0.55;
+      return w;
+    });
+    const total=ws.reduce((a,b)=>a+b,0);
+    if(total<=0) return arr[Math.floor(Math.random()*arr.length)];
+    let r=Math.random()*total;
+    for(let i=0;i<arr.length;i++){ r-=ws[i]; if(r<=0) return arr[i]; }
+    return arr[arr.length-1];
+  }
+  window.__dpclPickWeighted=weightedPick;
+  const fb0=readJSON(FEEDBACK_KEY,{});
+  window.__dpclTagFeedback=(fb0&&typeof fb0==="object")?fb0:{};
+  const rt0=readJSON("dpcl_recent_tags",[]);
+  window.__dpclRecentTags=Array.isArray(rt0)?rt0:[];
+  window.__dpclRecentSet=new Set(window.__dpclRecentTags.map(x=>String(x).toLowerCase()));
+
+  function getFeedback(){ return (window.__dpclTagFeedback&&typeof window.__dpclTagFeedback==="object")?window.__dpclTagFeedback:{}; }
+  function saveFeedback(fb){ window.__dpclTagFeedback=fb; if(!writeJSON(FEEDBACK_KEY,fb)) return false; renderFeedback(); return true; }
+  function setTagFeedback(tag,val){
+    const fb=Object.assign({},getFeedback());
+    const k=norm(tag);
+    if(val===0) delete fb[k]; else fb[k]=val;
+    if(saveFeedback(fb)&&typeof toast==="function") toast(val>0?"已设为多出："+tag:val<0?"已设为少出："+tag:"已清除偏好："+tag);
+  }
+  function renderFeedback(){
+    const wrap=q("#tag-feedback-list"); if(!wrap) return;
+    const fb=getFeedback();
+    const text=(q("#tag-feedback-search")?q("#tag-feedback-search").value:"").toLowerCase().trim();
+    let list=TAGS_SAFE.filter(t=>!text||t.tag.toLowerCase().indexOf(text)>=0||String(t.zh||"").indexOf(text)>=0||String(t.cat||"").indexOf(text)>=0);
+    list.sort((a,b)=>{ const fa=(fb[a.tag]?1:0), fbp=(fb[b.tag]?1:0); return fbp-fa; });
+    list=list.slice(0,50);
+    wrap.innerHTML="";
+    if(!list.length){ wrap.innerHTML='<div class="empty">没有匹配的 tag。</div>'; }
+    list.forEach(t=>{
+      const v=Number(fb[t.tag]||0);
+      const row=document.createElement("div"); row.className="tag-pref-row";
+      row.innerHTML="<span class=\"tag-pref-name\">"+escapeHtml(t.tag)+"</span><span class=\"tag-pref-zh\">"+escapeHtml(t.zh||"")+"</span><span class=\"tag-pref-cat\">"+escapeHtml(CAT_LABEL[t.cat]||t.cat)+"</span>";
+      const acts=document.createElement("span"); acts.className="tag-pref-actions";
+      const mk=(val,label,cls)=>{ const b=document.createElement("button"); b.type="button"; b.textContent=label; if(v===val)b.className=cls; b.onclick=()=>setTagFeedback(t.tag,val); acts.appendChild(b); };
+      mk(1,"+ 多出","on-pos"); mk(-1,"− 少出","on-neg"); mk(0,"清除","");
+      row.appendChild(acts); wrap.appendChild(row);
+    });
+    const positive=Object.values(fb).filter(x=>Number(x)>0).length;
+    const negative=Object.values(fb).filter(x=>Number(x)<0).length;
+    const stats=q("#tag-feedback-stats");
+    const recentCores=(()=>{try{const a=JSON.parse(localStorage.getItem("dpcl_recent_cores")||"[]");return Array.isArray(a)?a.length:0}catch(e){return 0}})();
+    if(stats) stats.textContent="正反馈 "+positive+" · 负反馈 "+negative+" · 近期 tag "+window.__dpclRecentTags.length+" / 核心 "+recentCores;
+  }
+
+  function repairPrompt(prompt){
+    let tags=splitTags(prompt);
+    const fixes=[];
+    const before=tags.length;
+    let u=uniqTags(tags);
+    if(u.length!==tags.length){ fixes.push("去重"); tags=u; }
+    const clean=tags.filter(t=>t&&t!=="undefined");
+    if(clean.length!==tags.length){ fixes.push("清理空值"); tags=clean; }
+    let low=tags.map(norm);
+    if(/explicit|uncensored|nsfw/.test(String(prompt).toLowerCase()) && low.indexOf("adult woman")<0){
+      tags.push("adult woman"); fixes.push("补 adult woman");
+    }
+    low=tags.map(norm);
+    const colorTags=tags.filter(t=>TAG_CAT.get(norm(t))==="hair" && COLORS.some(c=>norm(t).indexOf(c+" ")===0));
+    const colors=colorTags.map(t=>norm(t).split(" ")[0]);
+    if(new Set(colors).size>1){
+      const keep=colors[0];
+      tags=tags.filter(t=>{
+        const n=norm(t);
+        if(TAG_CAT.get(n)!=="hair") return true;
+        const c=COLORS.find(x=>n.indexOf(x+" ")===0);
+        return !c || c===keep;
+      });
+      fixes.push("双发色");
+    }
+    const clothes=tags.filter(t=>TAG_CAT.get(norm(t))==="clothing");
+    if(clothes.length>1){
+      const keep=norm(clothes[0]);
+      tags=tags.filter(t=>TAG_CAT.get(norm(t))!=="clothing" || norm(t)===keep);
+      fixes.push("多套服装");
+    }
+    const multi=/group sex|spitroast|double penetration|bukkake|threesome|multiple boys|gangbang|surrounded by men/;
+    low=tags.map(norm);
+    if((low.indexOf("solo")>=0 || low.indexOf("1boy")>=0) && low.some(t=>multi.test(t))){
+      tags=tags.filter(t=>!multi.test(norm(t)));
+      if(low.indexOf("1boy")>=0 && tags.map(norm).indexOf("only one boy")<0) tags.push("only one boy");
+      if(low.indexOf("solo")>=0 && tags.map(norm).indexOf("single focus")<0) tags.push("single focus");
+      fixes.push("多人冲突");
+    }
+    const isNsfwRepair=/explicit|uncensored|nsfw/.test(String(prompt).toLowerCase());
+    const hasAction=tags.some(t=>TAG_CAT.get(norm(t))==="action_nsfw"||TAG_CAT.get(norm(t))==="action_sfw");
+    if(!hasAction){
+      const actionPool=TAGS_SAFE.filter(t=>(isNsfwRepair?t.cat==="action_nsfw":t.cat==="action_sfw") && !multi.test(t.tag) && (isNsfwRepair||t.mode!=="nsfw"));
+      const actionPick=weightedPick(actionPool,t=>t.tag);
+      if(actionPick){ tags.push(actionPick.tag); fixes.push("补动作"); }
+    }
+    low=tags.map(norm);
+    const standing=/standing sex|standing position|standing doggystyle|standing split|against wall|against window|wall sex|shower|bathtub/.test(low.join(" "));
+    const seated=/on chair|chair sex|on sofa|sofa sex|on bed edge|bed edge sex|on floor|floor sex|on lap|sitting on partner lap|inside car|car sex/;
+    if(standing && low.some(t=>seated.test(t))){
+      tags=tags.filter(t=>!seated.test(norm(t)));
+      fixes.push("地点冲突");
+    }
+    tags=uniqTags(tags);
+    let text=tags.join(", ");
+    const budget=T.getBudget?T.getBudget():0;
+    if(budget){
+      const trimmed=T.trimPrompt?T.trimPrompt(text,budget):null;
+      if(trimmed && trimmed.text!==text){ text=trimmed.text; fixes.push("预算裁剪"); }
+    }
+    if(fixes.length===0 && before!==splitTags(text).length) fixes.push("格式");
+    return {text:text,fixes:fixes};
+  }
+
+  function refinePrompt(prompt){
+    const tags=splitTags(prompt);
+    const have=new Set(tags.map(norm));
+    const budget=T.getBudget?T.getBudget():0;
+    if(budget && tags.length>=budget) return {text:prompt,added:[]};
+    const nsfw=/explicit|uncensored|nsfw/.test(String(prompt).toLowerCase());
+    const pools=[
+      TAGS_SAFE.filter(t=>t.cat==="lighting"),
+      TAGS_SAFE.filter(t=>t.cat==="camera"||t.cat==="composition"),
+      TAGS_SAFE.filter(t=>t.cat==="effects"),
+      TAGS_SAFE.filter(t=>t.cat==="background"),
+      TAGS_SAFE.filter(t=>t.cat==="expression"),
+      TAGS_SAFE.filter(t=>t.cat==="accessory")
+    ];
+    if(nsfw) pools.push(TAGS_SAFE.filter(t=>t.cat==="nsfw_general"&&/atmosphere|lighting|focus|eye contact|breathless|trembling|passionate|sensual|intimate|romantic|heavy breathing|flushed|sweat|goosebumps|moaning|gasping|lustful|seductive|playful|slow|tender|rough|intense/.test(t.tag)));
+    const maxAdd=budget?Math.max(0,budget-tags.length):4;
+    const added=[];
+    for(const pool of pools){
+      if(added.length>=Math.min(4,maxAdd)) break;
+      const candidates=pool.filter(t=>!have.has(norm(t.tag)) && (nsfw || t.mode!=="nsfw"));
+      if(!candidates.length) continue;
+      const pick=weightedPick(candidates,t=>t.tag);
+      if(pick){ added.push(pick.tag); have.add(norm(pick.tag)); }
+    }
+    if(!added.length) return {text:prompt,added:[]};
+    return {text:tags.concat(added).join(", "),added:added};
+  }
+
+  function refreshCard(card){
+    if(T.updateCard) T.updateCard(card);
+    if(T.updateStarButtons) T.updateStarButtons();
+    if(T.updateQualitySummary) T.updateQualitySummary();
+  }
+  function repairCard(card){
+    const ta=card.querySelector("textarea"); if(!ta) return;
+    const res=repairPrompt(ta.value);
+    if(res.text===ta.value){ if(typeof toast==="function") toast("没有可自动修复的问题"); return; }
+    ta.value=res.text;
+    refreshCard(card);
+    const warns=T.lintPrompt?T.lintPrompt(ta.value):[];
+    if(typeof toast==="function") toast("已修复："+(res.fixes.join(" / ")||"格式")+(warns.length?"；仍有 "+warns.length+" 项提示":""));
+  }
+  function refineCard(card){
+    const ta=card.querySelector("textarea"); if(!ta) return;
+    const res=refinePrompt(ta.value);
+    if(!res.added.length){ if(typeof toast==="function") toast("没有可添加的细化词，或已达预算"); return; }
+    ta.value=res.text;
+    refreshCard(card);
+    if(typeof toast==="function") toast("已细化 +"+res.added.length+" 个 tag");
+  }
+
+  let chipCard=null, chipTags=[];
+  function hueFor(cat){
+    const map={quality:205,rating:330,character:260,species:120,body:15,hair:45,eyes:170,face:300,expression:25,clothing:220,accessory:285,pose:190,action_sfw:95,action_nsfw:345,nsfw_general:320,camera:200,composition:240,lighting:55,background:160,effects:35,after:10,negative:0};
+    return map[cat]||210;
+  }
+  function renderChipCurrent(){
+    const wrap=q("#chip-current"); if(!wrap) return;
+    wrap.innerHTML="";
+    chipTags.forEach((tag,i)=>{
+      const meta=TAG_MAP.get(norm(tag));
+      const chip=document.createElement("button"); chip.type="button"; chip.className="chip";
+      chip.style.setProperty("--hue",String(hueFor(meta?meta.cat:"other")));
+      chip.innerHTML="<span>"+escapeHtml(tag)+"</span><small>"+escapeHtml(meta?meta.zh:"")+"</small><b>×</b>";
+      chip.title="点击删除";
+      chip.onclick=()=>{ chipTags.splice(i,1); renderChipCurrent(); };
+      wrap.appendChild(chip);
+    });
+    const c=q("#chip-count"); if(c) c.textContent=chipTags.length+" tags";
+  }
+  function addChip(tag){
+    if(chipTags.some(x=>norm(x)===norm(tag))) return;
+    chipTags.push(tag); renderChipCurrent();
+  }
+  function renderChipResults(){
+    const input=q("#chip-search"); const wrap=q("#chip-results"); if(!wrap) return;
+    const text=(input?input.value:"").toLowerCase().trim();
+    const used=new Set(chipTags.map(norm));
+    const list=TAGS_SAFE.filter(t=>!used.has(norm(t.tag))&&(!text||t.tag.toLowerCase().indexOf(text)>=0||String(t.zh||"").indexOf(text)>=0||String(t.cat||"").indexOf(text)>=0)).slice(0,40);
+    wrap.innerHTML="";
+    if(!list.length){ wrap.innerHTML='<span class="muted">没有匹配的 tag</span>'; return; }
+    list.forEach(t=>{
+      const b=document.createElement("button"); b.type="button"; b.className="chip-result";
+      b.innerHTML=escapeHtml(t.tag)+"<small>"+escapeHtml(t.zh||"")+"</small>";
+      b.onclick=()=>addChip(t.tag);
+      wrap.appendChild(b);
+    });
+  }
+  function openChip(card){
+    chipCard=card; const ta=card.querySelector("textarea"); chipTags=splitTags(ta?ta.value:"");
+    const modal=q("#chip-modal"); if(!modal) return;
+    modal.classList.add("open"); modal.setAttribute("aria-hidden","false");
+    const s=q("#chip-search"); if(s) s.value="";
+    renderChipCurrent(); renderChipResults();
+  }
+  function closeChip(){
+    const modal=q("#chip-modal"); if(!modal) return;
+    modal.classList.remove("open"); modal.setAttribute("aria-hidden","true");
+    chipCard=null;
+  }
+  function applyChip(){
+    if(!chipCard) return;
+    const ta=chipCard.querySelector("textarea"); if(!ta) return;
+    ta.value=chipTags.join(", ");
+    refreshCard(chipCard);
+    closeChip();
+    if(typeof toast==="function") toast("芯片编辑已应用");
+  }
+
+  function hybridPrompt(a,b){
+    const A=splitTags(a), B=splitTags(b);
+    const out=[], seen=new Set();
+    const max=Math.max(A.length,B.length);
+    for(let i=0;i<max;i++){
+      const src=Math.random()<0.5?A:B;
+      const t=src[i];
+      if(t&&!seen.has(norm(t))){ seen.add(norm(t)); out.push(t); }
+    }
+    return repairPrompt(out.join(", ")).text;
+  }
+  function addCardTools(){
+    qa(".batch-item").forEach(card=>{
+      const anchor=card.querySelector(".star-one")||card.querySelector(".copy-one");
+      if(!anchor) return;
+      const mk=(cls,label,fn)=>{
+        if(card.querySelector("."+cls)) return;
+        const b=document.createElement("button"); b.type="button"; b.className=cls; b.textContent=label; b.onclick=fn;
+        anchor.insertAdjacentElement("afterend",b);
+      };
+      mk("chip-one","芯片",()=>openChip(card));
+      mk("refine-one","细化",()=>refineCard(card));
+      mk("fix-one","修复",()=>repairCard(card));
+    });
+  }
+  function addHybridCard(prompt){
+    const wrap=q("#batch-results"); if(!wrap) return;
+    const nsfw=/explicit|uncensored|nsfw/.test(prompt.toLowerCase());
+    const box=document.createElement("div"); box.className="batch-item";
+    box.innerHTML="<h3>"+(nsfw?"NSFW":"SFW")+"｜杂交</h3><div class=\"summary\">由两条收藏 Prompt 杂交生成，可继续修复 / 细化 / 芯片编辑。</div><textarea>"+escapeHtml(prompt)+"</textarea><button class=\"copy-one\">复制这一条</button>";
+    box.querySelector(".copy-one").onclick=()=>{ if(typeof copyText==="function") copyText(box.querySelector("textarea").value); };
+    wrap.insertBefore(box,wrap.firstChild);
+    if(T.decorateBatch) T.decorateBatch();
+    addCardTools();
+    const tab=document.querySelector('[data-page="page-generator"]'); if(tab) tab.click();
+    if(typeof toast==="function") toast("已生成杂交 Prompt");
+  }
+  function runHybrid(){
+    const selected=qa("#starred-list input[data-pick]:checked").map(x=>x.value);
+    if(selected.length!==2){ if(typeof toast==="function") toast("请勾选正好两条收藏 Prompt"); return; }
+    const list=T.getStars?T.getStars():[];
+    const a=list.find(x=>x.id===selected[0]), b=list.find(x=>x.id===selected[1]);
+    if(!a||!b){ if(typeof toast==="function") toast("收藏数据已变化，请重试"); return; }
+    addHybridCard(hybridPrompt(a.prompt,b.prompt));
+  }
+  function decorateStarPicks(){
+    const list=T.getStars?T.getStars():[];
+    qa("#starred-list .library-card").forEach(card=>{
+      if(card.querySelector(".star-pick")) return;
+      const ta=card.querySelector("textarea"); if(!ta) return;
+      const item=list.find(x=>x.prompt===ta.value); if(!item) return;
+      const label=document.createElement("label"); label.className="star-pick";
+      label.innerHTML="<input type=\"checkbox\" data-pick value=\""+escapeHtml(item.id)+"\"/> 选择";
+      const acts=card.querySelector(".library-actions");
+      if(acts) acts.insertBefore(label,acts.firstChild); else card.appendChild(label);
+    });
+  }
+  function updateHybridHint(){
+    const n=qa("#starred-list input[data-pick]:checked").length;
+    const hint=q("#hybrid-hint"); if(hint) hint.textContent=n?("已选 "+n+" / 2 条"):"勾选两条收藏";
+  }
+
+  function install(){
+    const s=q("#tag-feedback-search"); if(s) s.oninput=renderFeedback;
+    const clear=q("#fresh-clear"); if(clear) clear.onclick=()=>{
+      if(!confirm("清空最近 tag / 动作核心的新鲜度记忆？")) return;
+      localStorage.removeItem("dpcl_recent_tags");
+      localStorage.removeItem("dpcl_recent_cores");
+      window.__dpclRecentTags=[]; window.__dpclRecentSet=new Set();
+      if(typeof toast==="function") toast("已清空新鲜度记忆，正在刷新…");
+      setTimeout(()=>location.reload(),500);
+    };
+    const chipClose=q("#chip-close"); if(chipClose) chipClose.onclick=closeChip;
+    const chipApply=q("#chip-apply"); if(chipApply) chipApply.onclick=applyChip;
+    const chipSearch=q("#chip-search"); if(chipSearch) chipSearch.oninput=renderChipResults;
+    const modal=q("#chip-modal"); if(modal) modal.addEventListener("click",e=>{ if(e.target===modal) closeChip(); });
+    document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeChip(); });
+    const hybrid=q("#hybrid-run"); if(hybrid) hybrid.onclick=runHybrid;
+    document.addEventListener("change",e=>{ if(e.target&&e.target.matches&&e.target.matches("[data-pick]")) updateHybridHint(); });
+    const starWrap=q("#starred-list");
+    if(starWrap){ new MutationObserver(()=>{ decorateStarPicks(); updateHybridHint(); }).observe(starWrap,{childList:true,subtree:true}); }
+    renderFeedback();
+    decorateStarPicks();
+    updateHybridHint();
+    const old=window.renderBatch;
+    if(typeof old==="function" && !old.__v24){
+      const wrapped=function(){
+        old.apply(this,arguments);
+        setTimeout(addCardTools,0); setTimeout(addCardTools,180); setTimeout(addCardTools,320); setTimeout(renderFeedback,360);
+      };
+      wrapped.__v24=true; window.renderBatch=wrapped;
+    }
+    const btn=q("#make-batch"); if(btn) btn.onclick=window.renderBatch;
+    addCardTools();
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",install);
+  else install();
 })();
