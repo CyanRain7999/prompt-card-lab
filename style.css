@@ -78,3 +78,32 @@
     color: rgba(238, 247, 255, 0.82);
   }
 }
+
+
+/* v2.0 mobile card grid: 窄屏不再用绝对定位的散落卡片，避免 20 张卡堆叠 */
+@media (max-width: 760px) {
+  #page-cards.active { height: auto !important; overflow: visible !important; }
+  .card-stage {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    height: auto !important;
+    min-height: 0;
+    padding: 8px;
+    overflow: visible !important;
+    align-content: start;
+  }
+  .card-stage .tag-card {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    touch-action: auto !important;
+    word-break: break-word;
+  }
+  .card-stage .tag-card:hover { transform: none !important; z-index: auto !important; }
+  #page-cards .picked-panel { margin-top: 10px; }
+}

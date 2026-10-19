@@ -1,4 +1,5 @@
-const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));let picked=[],zCounter=10,currentCards=[],categoryDebt=Object.fromEntries(CATEGORY_ORDER.map(c=>[c,1])),recentTags=[];const activeTags=[...TAGS];const colorMap={quality:205,rating:330,character:260,species:120,body:15,hair:45,eyes:170,face:300,expression:25,clothing:220,accessory:285,pose:190,action_sfw:95,action_nsfw:345,camera:200,composition:240,lighting:55,background:160,effects:35,after:10,negative:0,danbooru_general:270};function toast(m){const e=$("#toast");e.textContent=m;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),1600)}function pickOne(a){return a[Math.floor(Math.random()*a.length)]}function key(i){return `${i.cat}::${i.tag}`}function isPicked(i){return picked.some(p=>key(p)===key(i))}function poolByMode(m){if(m==="mixed")return activeTags;if(m==="sfw")return activeTags.filter(t=>t.mode==="sfw"||t.mode==="mixed"||t.cat==="negative");if(m==="nsfw")return activeTags.filter(t=>t.mode==="nsfw"||t.mode==="mixed"||t.cat==="negative");return activeTags}function weightedCategory(m){const cats=CATEGORY_ORDER.filter(c=>poolByMode(m).some(t=>t.cat===c));const w=cats.map(c=>{let base=c==="negative"?.65:c==="quality"?.75:c==="danbooru_general"?.35:1;return base*Math.max(.15,categoryDebt[c]||1)});let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<cats.length;i++){r-=w[i];if(r<=0)return cats[i]}return cats[0]}function getPoolForCat(cat,mode,seen){let p=poolByMode(mode).filter(t=>t.cat===cat&&!seen.has(t.tag)&&!recentTags.includes(t.tag));if(!p.length)p=poolByMode(mode).filter(t=>t.cat===cat&&!seen.has(t.tag));return p}function generateCards(){const st=$("#card-stage"),cnt=Math.max(8,Math.min(80,Number($("#card-count").value||20))),mode=$("#card-mode").value,chosen=[],seen=new Set(),appeared=new Set();let guaranteed=["quality","hair","eyes","expression","clothing","pose","camera","composition","lighting","background","negative"];if(mode==="sfw")guaranteed.push("action_sfw");else if(mode==="nsfw")guaranteed.push("action_nsfw","rating");else guaranteed.push("action_sfw","action_nsfw","rating");for(const cat of guaranteed){if(chosen.length>=cnt)break;const pool=getPoolForCat(cat,mode,seen);if(pool.length){const item=pickOne(pool);chosen.push(item);seen.add(item.tag);appeared.add(item.cat)}}while(chosen.length<cnt){let cat=weightedCategory(mode),pool=getPoolForCat(cat,mode,seen);if(!pool.length)pool=poolByMode(mode).filter(t=>!seen.has(t.tag)&&!recentTags.includes(t.tag));if(!pool.length)pool=poolByMode(mode).filter(t=>!seen.has(t.tag));const item=pickOne(pool);if(!item)break;chosen.push(item);seen.add(item.tag);appeared.add(item.cat)}CATEGORY_ORDER.forEach(c=>{if(appeared.has(c))categoryDebt[c]=1;else categoryDebt[c]=Math.min(5,(categoryDebt[c]||1)+.45)});recentTags=[...chosen.map(x=>x.tag),...recentTags].slice(0,260);const w=st.clientWidth||1000,h=st.clientHeight||520;currentCards=chosen.map((it,i)=>({...it,id:key(it),x:Math.max(8,Math.random()*(w-240)),y:Math.max(8,Math.random()*(h-88)),rot:Number((Math.random()*30-15).toFixed(1)),hue:(colorMap[it.cat]??Math.floor(Math.random()*360))+Math.random()*28-14,z:i+1}));renderStage()}function fillCard(card,it){card.innerHTML="";let en=document.createElement("div");en.className="tag-en";en.textContent=it.tag;let zh=document.createElement("div");zh.className="tag-zh";zh.textContent=it.zh||"未翻译";let meta=document.createElement("div");meta.className="tag-meta";meta.textContent=`${CATEGORY_LABEL[it.cat]||it.cat} · ${(it.count||0).toLocaleString()}`;card.append(en,zh,meta)}function renderStage(){const st=$("#card-stage");st.innerHTML="";currentCards.filter(it=>!isPicked(it)).forEach(it=>{const c=document.createElement("div");c.className="tag-card";fillCard(c,it);c.style.left=it.x+"px";c.style.top=it.y+"px";c.style.zIndex=String(it.z||1);c.style.setProperty("--rot",`${it.rot||0}deg`);c.style.setProperty("--hue",`${it.hue||220}`);installDrag(c,it);st.appendChild(c)})}function installDrag(card,it){let sx=0,sy=0,ox=0,oy=0,moved=false,drag=false;card.addEventListener("mouseenter",()=>{it.z=++zCounter;card.style.zIndex=String(it.z)});card.addEventListener("pointerdown",e=>{e.preventDefault();drag=true;moved=false;sx=e.clientX;sy=e.clientY;ox=it.x;oy=it.y;it.homeX=ox;it.homeY=oy;it.z=++zCounter;card.style.zIndex=String(it.z);card.classList.add("dragging");card.setPointerCapture(e.pointerId)});card.addEventListener("pointermove",e=>{if(!drag)return;let dx=e.clientX-sx,dy=e.clientY-sy;if(Math.abs(dx)+Math.abs(dy)>4)moved=true;it.x=ox+dx;it.y=oy+dy;card.style.left=it.x+"px";card.style.top=it.y+"px";card.style.setProperty("--rot","0deg")});card.addEventListener("pointerup",e=>{if(!drag)return;drag=false;card.classList.remove("dragging");try{card.releasePointerCapture(e.pointerId)}catch{}const p=$(".picked-panel").getBoundingClientRect(),drop=e.clientX>=p.left&&e.clientX<=p.right&&e.clientY>=p.top&&e.clientY<=p.bottom;if(!moved||drop){addPicked(it);return}const st=$("#card-stage"),mx=Math.max(8,st.clientWidth-card.offsetWidth-8),my=Math.max(8,st.clientHeight-card.offsetHeight-8);it.x=Math.min(mx,Math.max(8,it.x));it.y=Math.min(my,Math.max(8,it.y));it.rot=Number((Math.random()*24-12).toFixed(1));card.style.left=it.x+"px";card.style.top=it.y+"px";card.style.setProperty("--rot",`${it.rot}deg`)})}function clampToStagePos(x,y){
+const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));let picked=[],zCounter=10,currentCards=[],categoryDebt=Object.fromEntries(CATEGORY_ORDER.map(c=>[c,1])),recentTags=[];const activeTags=[...TAGS];const colorMap={quality:205,rating:330,character:260,species:120,body:15,hair:45,eyes:170,face:300,expression:25,clothing:220,accessory:285,pose:190,action_sfw:95,action_nsfw:345,camera:200,composition:240,lighting:55,background:160,effects:35,after:10,negative:0,danbooru_general:270,nsfw_general:320};function toast(m){const e=$("#toast");e.textContent=m;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),1600)}function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+function pickOne(a){return a[Math.floor(Math.random()*a.length)]}function key(i){return `${i.cat}::${i.tag}`}function isPicked(i){return picked.some(p=>key(p)===key(i))}function poolByMode(m){if(m==="mixed")return activeTags;if(m==="sfw")return activeTags.filter(t=>t.mode==="sfw"||t.mode==="mixed"||t.cat==="negative");if(m==="nsfw")return activeTags.filter(t=>t.mode==="nsfw"||t.mode==="mixed"||t.cat==="negative");return activeTags}function weightedCategory(m){const cats=CATEGORY_ORDER.filter(c=>poolByMode(m).some(t=>t.cat===c));const w=cats.map(c=>{let base=c==="negative"?.65:c==="quality"?.75:c==="danbooru_general"?.35:1;return base*Math.max(.15,categoryDebt[c]||1)});let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<cats.length;i++){r-=w[i];if(r<=0)return cats[i]}return cats[0]}function getPoolForCat(cat,mode,seen){let p=poolByMode(mode).filter(t=>t.cat===cat&&!seen.has(t.tag)&&!recentTags.includes(t.tag));if(!p.length)p=poolByMode(mode).filter(t=>t.cat===cat&&!seen.has(t.tag));return p}function generateCards(){const st=$("#card-stage"),cnt=Math.max(8,Math.min(80,Number($("#card-count").value||20))),mode=$("#card-mode").value,chosen=[],seen=new Set(),appeared=new Set();let guaranteed=["quality","hair","eyes","expression","clothing","pose","camera","composition","lighting","background","negative"];if(mode==="sfw")guaranteed.push("action_sfw");else if(mode==="nsfw")guaranteed.push("action_nsfw","rating");else guaranteed.push("action_sfw","action_nsfw","rating");for(const cat of guaranteed){if(chosen.length>=cnt)break;const pool=getPoolForCat(cat,mode,seen);if(pool.length){const item=pickOne(pool);chosen.push(item);seen.add(item.tag);appeared.add(item.cat)}}while(chosen.length<cnt){let cat=weightedCategory(mode),pool=getPoolForCat(cat,mode,seen);if(!pool.length)pool=poolByMode(mode).filter(t=>!seen.has(t.tag)&&!recentTags.includes(t.tag));if(!pool.length)pool=poolByMode(mode).filter(t=>!seen.has(t.tag));const item=pickOne(pool);if(!item)break;chosen.push(item);seen.add(item.tag);appeared.add(item.cat)}CATEGORY_ORDER.forEach(c=>{if(appeared.has(c))categoryDebt[c]=1;else categoryDebt[c]=Math.min(5,(categoryDebt[c]||1)+.45)});recentTags=[...chosen.map(x=>x.tag),...recentTags].slice(0,260);const w=st.clientWidth||1000,h=st.clientHeight||520;currentCards=chosen.map((it,i)=>({...it,id:key(it),x:Math.max(8,Math.random()*(w-240)),y:Math.max(8,Math.random()*(h-88)),rot:Number((Math.random()*30-15).toFixed(1)),hue:(colorMap[it.cat]??Math.floor(Math.random()*360))+Math.random()*28-14,z:i+1}));renderStage()}function fillCard(card,it){card.innerHTML="";let en=document.createElement("div");en.className="tag-en";en.textContent=it.tag;let zh=document.createElement("div");zh.className="tag-zh";zh.textContent=it.zh||"未翻译";let meta=document.createElement("div");meta.className="tag-meta";meta.textContent=`${CATEGORY_LABEL[it.cat]||it.cat}${it.count?" · "+Number(it.count).toLocaleString():""}`;card.append(en,zh,meta)}function renderStage(){const st=$("#card-stage");st.innerHTML="";currentCards.filter(it=>!isPicked(it)).forEach(it=>{const c=document.createElement("div");c.className="tag-card";fillCard(c,it);c.style.left=it.x+"px";c.style.top=it.y+"px";c.style.zIndex=String(it.z||1);c.style.setProperty("--rot",`${it.rot||0}deg`);c.style.setProperty("--hue",`${it.hue||220}`);installDrag(c,it);st.appendChild(c)})}function installDrag(card,it){let sx=0,sy=0,ox=0,oy=0,moved=false,drag=false;card.addEventListener("mouseenter",()=>{it.z=++zCounter;card.style.zIndex=String(it.z)});card.addEventListener("pointerdown",e=>{e.preventDefault();drag=true;moved=false;sx=e.clientX;sy=e.clientY;ox=it.x;oy=it.y;it.homeX=ox;it.homeY=oy;it.z=++zCounter;card.style.zIndex=String(it.z);card.classList.add("dragging");card.setPointerCapture(e.pointerId)});card.addEventListener("pointermove",e=>{if(!drag)return;let dx=e.clientX-sx,dy=e.clientY-sy;if(Math.abs(dx)+Math.abs(dy)>4)moved=true;it.x=ox+dx;it.y=oy+dy;card.style.left=it.x+"px";card.style.top=it.y+"px";card.style.setProperty("--rot","0deg")});card.addEventListener("pointerup",e=>{if(!drag)return;drag=false;card.classList.remove("dragging");try{card.releasePointerCapture(e.pointerId)}catch{}const p=$(".picked-panel").getBoundingClientRect(),drop=e.clientX>=p.left&&e.clientX<=p.right&&e.clientY>=p.top&&e.clientY<=p.bottom;if(!moved||drop){addPicked(it);return}const st=$("#card-stage"),mx=Math.max(8,st.clientWidth-card.offsetWidth-8),my=Math.max(8,st.clientHeight-card.offsetHeight-8);it.x=Math.min(mx,Math.max(8,it.x));it.y=Math.min(my,Math.max(8,it.y));it.rot=Number((Math.random()*24-12).toFixed(1));card.style.left=it.x+"px";card.style.top=it.y+"px";card.style.setProperty("--rot",`${it.rot}deg`)})}function clampToStagePos(x,y){
  const st=$("#card-stage");
  const maxX=Math.max(8,(st?.clientWidth||900)-240);
  const maxY=Math.max(8,(st?.clientHeight||520)-88);
@@ -12,7 +13,7 @@ function addPicked(it){
   picked.push({...it,rot:0,returnX:pos.x,returnY:pos.y});
   renderPicked();renderStage();toast(`已加入：${it.tag}`);
  }
-}function renderPicked(){const w=$("#picked-groups");w.innerHTML="";if(!picked.length){w.innerHTML='<div class="empty">还没有收集卡片。</div>';return}CATEGORY_ORDER.forEach(cat=>{const arr=picked.filter(p=>p.cat===cat);if(!arr.length)return;const g=document.createElement("div");g.className="picked-group";g.innerHTML=`<h3>${CATEGORY_LABEL[cat]||cat}</h3>`;arr.forEach(it=>{const c=document.createElement("button");c.className="tag-card picked";c.style.setProperty("--rot","0deg");c.style.setProperty("--hue",`${it.hue||colorMap[it.cat]||220}`);fillCard(c,it);c.onclick=()=>{picked=picked.filter(p=>key(p)!==key(it));const back=currentCards.find(x=>key(x)===key(it));if(back){const pos=clampToStagePos(Number.isFinite(it.returnX)?it.returnX:back.x,Number.isFinite(it.returnY)?it.returnY:back.y);back.x=pos.x;back.y=pos.y;back.rot=Number((Math.random()*30-15).toFixed(1));back.z=++zCounter;}renderPicked();renderStage();toast(`已移回：${it.tag}`)};g.appendChild(c)});w.appendChild(g)})}function exportPicked(){let arr=[];CATEGORY_ORDER.forEach(cat=>picked.filter(p=>p.cat===cat).forEach(p=>arr.push(p.tag)));const t=arr.join(", ");$("#export-output").value=t;return t}async function copyText(t){try{await navigator.clipboard.writeText(t);toast("已复制")}catch{toast("复制失败，可以手动复制")}}function setupTabs(){$$(".tab").forEach(b=>b.onclick=()=>{$$(".tab").forEach(x=>x.classList.remove("active"));$$(".page").forEach(x=>x.classList.remove("active"));b.classList.add("active");$("#"+b.dataset.page).classList.add("active")})}
+}function renderPicked(){const w=$("#picked-groups");w.innerHTML="";if(!picked.length){w.innerHTML='<div class="empty">还没有收集卡片。</div>';return}CATEGORY_ORDER.forEach(cat=>{const arr=picked.filter(p=>p.cat===cat);if(!arr.length)return;const g=document.createElement("div");g.className="picked-group";g.innerHTML=`<h3>${CATEGORY_LABEL[cat]||cat}</h3>`;arr.forEach(it=>{const c=document.createElement("button");c.className="tag-card picked";c.style.setProperty("--rot","0deg");c.style.setProperty("--hue",`${it.hue||colorMap[it.cat]||220}`);fillCard(c,it);c.onclick=()=>{picked=picked.filter(p=>key(p)!==key(it));const back=currentCards.find(x=>key(x)===key(it));if(back){const pos=clampToStagePos(Number.isFinite(it.returnX)?it.returnX:back.x,Number.isFinite(it.returnY)?it.returnY:back.y);back.x=pos.x;back.y=pos.y;back.rot=Number((Math.random()*30-15).toFixed(1));back.z=++zCounter;}renderPicked();renderStage();toast(`已移回：${it.tag}`)};g.appendChild(c)});w.appendChild(g)})}function exportPicked(){let arr=[];CATEGORY_ORDER.forEach(cat=>picked.filter(p=>p.cat===cat).forEach(p=>arr.push(p.tag)));const t=arr.join(", ");$("#export-output").value=t;return t}async function copyText(t){try{await navigator.clipboard.writeText(t);toast("已复制")}catch{toast("复制失败，可以手动复制")}}function setupTabs(){$$(".tab").forEach(b=>b.onclick=()=>{$$(".tab").forEach(x=>x.classList.remove("active"));$$(".page").forEach(x=>x.classList.remove("active"));b.classList.add("active");$("#"+b.dataset.page).classList.add("active");if(b.dataset.page==="page-generator"&&$("#batch-results")&&!$("#batch-results").children.length&&typeof window.renderBatch==="function")window.renderBatch()})}
 /* v1.4 第二页：固定控制池 + 动态大池
    目标：
    1. 不再只有几百个手写 tags 可供第二页使用。
@@ -533,7 +534,7 @@ function renderBatch(){
  }
 }
 function getBatchText(){
- return $$(".batch-item").map(box=>box.querySelector("h3").textContent.replace(/^\d+\.\s*/,"")+"\n"+box.querySelector(".summary").textContent+"\n\n"+box.querySelector("textarea").value).join("\n\n");
+ return $$(".batch-item").map(box=>box.querySelector("textarea").value).join("\n\n");
 }
 function downloadText(fn,t){
  const b=new Blob([t],{type:"text/plain;charset=utf-8"}),u=URL.createObjectURL(b),a=document.createElement("a");
@@ -707,912 +708,7 @@ function renderOCList(){
   w.appendChild(d);
  });
 }
-function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-note").value.trim(),content=$("#artist-content").value.trim();if(!name||!content){toast("名称和内容不能为空");return}let list=getStore("dpcl_artist_list");list.unshift({id:Date.now(),name,note,content});setStore("dpcl_artist_list",list);$("#artist-name").value=$("#artist-note").value=$("#artist-content").value="";renderArtistList();toast("画师串已保存")}function renderArtistList(){let w=$("#artist-list"),list=getStore("dpcl_artist_list");w.innerHTML="";if(!list.length){w.innerHTML='<div class="empty">还没有保存画师串。</div>';return}list.forEach(it=>{let d=document.createElement("div");d.className="library-card";d.innerHTML=`<h3>${it.name}</h3><p>${it.note||""}</p><textarea readonly>${it.content}</textarea><div class="library-actions"><button data-copy>复制</button><button data-del>删除</button></div>`;d.querySelector("[data-copy]").onclick=()=>copyText(it.content);d.querySelector("[data-del]").onclick=()=>{setStore("dpcl_artist_list",list.filter(x=>x.id!==it.id));renderArtistList()};w.appendChild(d)})}document.addEventListener("DOMContentLoaded",()=>{setupTabs();generateCards();renderPicked();renderBatch();renderOCList();renderArtistList();$("#refresh-cards").onclick=generateCards;$("#clear-picked").onclick=()=>{picked=[];renderPicked();renderStage();$("#export-output").value=""};$("#export-picked").onclick=()=>{exportPicked();toast("已导出")};$("#copy-picked").onclick=()=>copyText(exportPicked());$("#make-batch").onclick=renderBatch;$("#copy-batch").onclick=()=>copyText(getBatchText());$("#download-batch").onclick=()=>downloadText("batch_prompts.txt",getBatchText());$("#save-oc").onclick=saveOC; if($("#compress-oc-images")) $("#compress-oc-images").onclick=()=>compactOCImages(false); compactOCImages(true);$("#save-artist").onclick=saveArtist});
-
-
-/* ===== v1.5.1 second-page prompt compactor ===== */
-(function(){
-  const KEEP_ALWAYS = new Set([
-    "1girl","solo","pov","1boy","2boys","3boys","multiple boys",
-    "sfw","nsfw","no text","uncensored","censored"
-  ]);
-
-  const QUALITY_GROUP = [
-    /^masterpiece$/i,
-    /^best quality$/i,
-    /^very aesthetic$/i,
-    /^newest$/i,
-    /^highly detailed$/i,
-    /^detailed wallpaper$/i,
-    /^ultra-?detailed$/i,
-    /^cg illustration$/i
-  ];
-
-  const CAMERA_GROUP = [
-    /^close-?up$/i,
-    /^upper body$/i,
-    /^cowboy shot$/i,
-    /^full body$/i,
-    /^front view$/i,
-    /^side view$/i,
-    /^from above$/i,
-    /^low angle$/i,
-    /^high angle$/i,
-    /^over-?the-?shoulder view$/i,
-    /^dutch angle$/i,
-    /^diagonal camera$/i,
-    /^off-?center camera$/i
-  ];
-
-  const COMPOSITION_GROUP = [
-    /^dynamic composition$/i,
-    /^diagonal composition$/i,
-    /^strong perspective$/i,
-    /^extreme perspective$/i,
-    /^strong foreshortening$/i,
-    /^dramatic crop$/i,
-    /^cinematic crop$/i
-  ];
-
-  const EFFECT_GROUP = [
-    /^dramatic lighting$/i,
-    /^atmospheric lighting$/i,
-    /^cinematic lighting$/i,
-    /^cinematic shadows$/i,
-    /^high contrast shadows$/i,
-    /^soft shadows$/i,
-    /^moonlight$/i,
-    /^soft sunlight$/i,
-    /^glowing particles$/i,
-    /^floating petals$/i,
-    /^motion blur$/i,
-    /^wind$/i,
-    /^hair flowing$/i
-  ];
-
-  const LOW_PRIORITY = [
-    /^very aesthetic$/i,
-    /^newest$/i,
-    /^highly detailed$/i,
-    /^detailed wallpaper$/i,
-    /^ultra-?detailed$/i,
-    /^cg illustration$/i,
-    /^dramatic lighting$/i,
-    /^atmospheric lighting$/i,
-    /^cinematic lighting$/i,
-    /^cinematic shadows$/i,
-    /^high contrast shadows$/i,
-    /^soft shadows$/i,
-    /^glowing particles$/i,
-    /^floating petals$/i,
-    /^motion blur$/i,
-    /^wind$/i,
-    /^hair flowing$/i,
-    /^moonlight$/i,
-    /^soft sunlight$/i,
-    /^dreamy .*$/i,
-    /^soft .* background$/i
-  ];
-
-  const MED_PRIORITY = [
-    /^close-?up$/i,
-    /^upper body$/i,
-    /^cowboy shot$/i,
-    /^front view$/i,
-    /^side view$/i,
-    /^from above$/i,
-    /^low angle$/i,
-    /^high angle$/i,
-    /^over-?the-?shoulder view$/i,
-    /^dutch angle$/i,
-    /^diagonal camera$/i,
-    /^off-?center camera$/i,
-    /^dynamic composition$/i,
-    /^diagonal composition$/i,
-    /^strong perspective$/i,
-    /^extreme perspective$/i,
-    /^strong foreshortening$/i,
-    /^dramatic crop$/i,
-    /^cinematic crop$/i,
-    /^natural expression$/i,
-    /^soft smile$/i,
-    /^playful smile$/i,
-    /^confident smile$/i,
-    /^mischievous smile$/i,
-    /^sleepy expression$/i,
-    /^sleepy smile$/i
-  ];
-
-  function matchesAny(tag, patterns){
-    return patterns.some(rx => rx.test(tag));
-  }
-
-  function dedupeTags(tags){
-    const out = [];
-    const seen = new Set();
-    tags.forEach(tag=>{
-      const k = tag.toLowerCase();
-      if(!seen.has(k)){
-        seen.add(k);
-        out.push(tag);
-      }
-    });
-    return out;
-  }
-
-  function capGroup(tags, patterns, keepCount){
-    const keep = [];
-    let kept = 0;
-    for(const tag of tags){
-      if(matchesAny(tag, patterns)){
-        if(kept < keepCount){
-          keep.push(tag);
-          kept += 1;
-        }
-      }else{
-        keep.push(tag);
-      }
-    }
-    return keep;
-  }
-
-  function compactPromptText(text){
-    if(!text || typeof text !== "string") return text;
-
-    let tags = text.split(",").map(s=>s.trim()).filter(Boolean);
-    tags = dedupeTags(tags);
-
-    // 太短就不动
-    if(tags.length <= 26) return tags.join(", ");
-
-    // 目标：整体压掉约 10-20 个词，但尽量不伤核心语义
-    let target = tags.length;
-    if(tags.length >= 46) target = tags.length - 18;
-    else if(tags.length >= 40) target = tags.length - 16;
-    else if(tags.length >= 34) target = tags.length - 14;
-    else if(tags.length >= 30) target = tags.length - 10;
-
-    // 保证不会压得太狠
-    target = Math.max(target, 24);
-
-    // 质量词只保留最多 3 个
-    tags = capGroup(tags, QUALITY_GROUP, 3);
-    // 镜头保留最多 2 个
-    tags = capGroup(tags, CAMERA_GROUP, 2);
-    // 构图保留最多 2 个
-    tags = capGroup(tags, COMPOSITION_GROUP, 2);
-    // 光影/效果保留最多 2 个
-    tags = capGroup(tags, EFFECT_GROUP, 2);
-
-    // 低优先级先删
-    function removeByPatterns(tagsIn, patterns, targetLen){
-      const out = [];
-      for(const tag of tagsIn){
-        if(out.length >= targetLen){
-          continue
-        }
-        out.push(tag);
-      }
-      let current = out.slice();
-      for(let i=current.length-1; i>=0 && current.length > targetLen; i--){
-        const tag = current[i];
-        if(KEEP_ALWAYS.has(tag.toLowerCase())) continue;
-        if(matchesAny(tag, patterns)){
-          current.splice(i,1);
-        }
-      }
-      return current;
-    }
-
-    let current = tags.slice();
-
-    // 如果还是过长，先砍低优先级
-    if(current.length > target){
-      for(let i=current.length-1; i>=0 && current.length > target; i--){
-        const tag = current[i];
-        if(KEEP_ALWAYS.has(tag.toLowerCase())) continue;
-        if(matchesAny(tag, LOW_PRIORITY)){
-          current.splice(i,1);
-        }
-      }
-    }
-
-    // 再砍中优先级
-    if(current.length > target){
-      for(let i=current.length-1; i>=0 && current.length > target; i--){
-        const tag = current[i];
-        if(KEEP_ALWAYS.has(tag.toLowerCase())) continue;
-        if(matchesAny(tag, MED_PRIORITY)){
-          current.splice(i,1);
-        }
-      }
-    }
-
-    // 如果仍然偏长，再砍很泛的风格补词，但尽量保留角色/动作/场景
-    if(current.length > target){
-      const genericWords = [
-        /^beautiful .*$/i, /^detailed .*$/i, /^intense .*$/i, /^stylish .*$/i,
-        /^cinematic .*$/i, /^soft .*$/i, /^dramatic .*$/i, /^dreamy .*$/i,
-        /^gentle .*$/i, /^bright .*$/i
-      ];
-      for(let i=current.length-1; i>=0 && current.length > target; i--){
-        const tag = current[i];
-        if(KEEP_ALWAYS.has(tag.toLowerCase())) continue;
-        if(matchesAny(tag, genericWords)){
-          current.splice(i,1);
-        }
-      }
-    }
-
-    return current.join(", ");
-  }
-
-  function tryCompactTextarea(ta){
-    if(!ta) return;
-    const oldText = ("value" in ta ? ta.value : ta.textContent || "").trim();
-    if(!oldText) return;
-
-    const card = ta.closest("div");
-    if(!card) return;
-
-    // 只动第二页结果卡：需要附近存在“复制这一条”按钮
-    const hasCopyBtn = Array.from(card.querySelectorAll("button")).some(btn => /复制这一条|copy/i.test((btn.textContent || "").trim()));
-    if(!hasCopyBtn) return;
-
-    const newText = compactPromptText(oldText);
-    if(newText && newText !== oldText){
-      if("value" in ta) ta.value = newText;
-      else ta.textContent = newText;
-      ta.dataset.compacted = "1";
-    }
-  }
-
-  function compactSecondPageResults(root=document){
-    root.querySelectorAll("textarea").forEach(tryCompactTextarea);
-  }
-
-  function interceptCopyButtons(){
-    document.addEventListener("click", function(e){
-      const btn = e.target.closest("button");
-      if(!btn) return;
-      if(!/复制这一条|copy/i.test((btn.textContent || "").trim())) return;
-
-      const card = btn.closest("div");
-      if(!card) return;
-      const ta = card.querySelector("textarea");
-      if(!ta) return;
-
-      const newText = compactPromptText(("value" in ta ? ta.value : ta.textContent || "").trim());
-      if("value" in ta) ta.value = newText;
-      else ta.textContent = newText;
-
-      if(navigator.clipboard && navigator.clipboard.writeText){
-        navigator.clipboard.writeText(newText);
-      }
-      if(typeof toast === "function") toast("已复制精简版 prompt");
-      e.preventDefault();
-      e.stopImmediatePropagation();
-    }, true);
-  }
-
-  function installCompactor(){
-    compactSecondPageResults(document);
-
-    const obs = new MutationObserver((mutations)=>{
-      for(const m of mutations){
-        for(const node of m.addedNodes){
-          if(node && node.nodeType === 1){
-            compactSecondPageResults(node);
-          }
-        }
-      }
-    });
-    obs.observe(document.body, {childList:true, subtree:true});
-    interceptCopyButtons();
-  }
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", installCompactor);
-  }else{
-    installCompactor();
-  }
-
-  // 兼容部分结果异步晚到的情况
-  window.addEventListener("load", ()=>{
-    setTimeout(()=>compactSecondPageResults(document), 300);
-    setTimeout(()=>compactSecondPageResults(document), 900);
-  });
-})();
-
-
-
-/* ===== v1.5.2 big-pool diversify + stronger compact ===== */
-(function(){
-  const V152_BIG_POOL = {"body": ["detailed wolf illustration", "wolf girl", "detailed summer girl", "detailed nurse illustration", "detailed cool girl", "demon girl", "athletic body", "detailed sporty girl", "detailed wolf girl", "detailed elegant mood", "detailed cat mood", "detailed chinese illustration", "detailed gothic mood", "detailed sporty illustration", "fox girl", "detailed casual girl", "detailed bunny illustration", "detailed chinese mood", "detailed fox illustration", "detailed chinese girl", "detailed autumn illustration", "detailed maid mood", "detailed cute illustration", "detailed beautiful girl", "narrow waist", "detailed japanese girl", "detailed idol mood", "detailed modern illustration", "angel girl", "detailed dragon mood", "multiple tails", "detailed modern mood", "detailed fox girl", "detailed gothic girl", "huge breasts", "detailed winter girl", "detailed spring mood", "detailed cool illustration", "detailed idol girl", "detailed nurse girl", "detailed summer illustration", "thick thighs", "sweat", "detailed winter illustration", "detailed demon girl", "detailed summer mood", "detailed angel mood", "medium breasts", "detailed angel illustration", "detailed cat girl", "detailed japanese illustration", "detailed idol illustration", "detailed witch mood", "detailed techwear illustration", "detailed demon illustration", "animal ears", "pale skin", "detailed techwear girl", "detailed winter mood", "detailed butler illustration", "detailed beautiful illustration", "detailed maid girl", "tail", "detailed elegant girl", "detailed cool mood", "detailed cat illustration", "horns", "small breasts", "detailed fox mood", "kemonomimi", "detailed butler mood", "detailed sporty mood", "detailed spring illustration", "detailed dragon illustration", "detailed casual mood", "detailed beautiful mood", "detailed angel girl", "detailed bunny mood", "large breasts", "detailed cute mood", "detailed wolf mood", "detailed spring girl", "detailed autumn girl", "detailed traditional girl", "detailed butler girl", "detailed traditional mood", "detailed fantasy girl", "fox ears", "detailed bunny girl", "detailed casual illustration", "detailed techwear mood", "detailed dragon girl", "dark skin", "wide hips", "detailed modern girl", "detailed witch illustration", "detailed witch girl", "highly detailed", "detailed nurse mood", "flat chest", "detailed japanese mood", "detailed demon mood", "detailed cute girl", "wings", "detailed fantasy illustration", "wolf ears", "cat girl", "curvy body", "detailed maid illustration", "dragon girl", "soft skin", "detailed traditional illustration", "detailed fantasy mood", "detailed gothic illustration", "bunny girl", "detailed elegant illustration", "detailed autumn mood"], "hair": ["stylish techwear hair", "dynamic winter hair", "detailed angel hair", "dark_twintails", "purple braid", "soft demon hair", "blonde bangs", "intense nurse hair", "intense techwear hair", "green_drill_hair", "stylish summer hair", "pale_braid", "blonde_bob_cut", "dark_braid", "purple hair", "silver_hair", "cinematic cool hair", "blonde braid", "autumn_hair", "intense autumn hair", "summer hair", "light_hair", "dramatic dragon hair", "detailed casual hair", "detailed winter hair", "bright casual hair", "fantasy hair", "bright wolf hair", "light_sidelocks", "gold_bangs", "dark chinese hair", "gold_drill_hair", "dynamic demon hair", "cinematic cute hair", "orange sidelocks", "dark cool hair", "beautiful hair", "purple bangs", "multicolored braid", "stylish sporty hair", "night_hair", "cinematic modern hair", "gentle techwear hair", "cinematic cat hair", "orange twintails", "cinematic spring hair", "soft cool hair", "intense bunny hair", "gold_twintails", "grey bangs", "intense idol hair", "teal twintails", "teal bangs", "gold ponytail", "light_bangs", "cool hair", "grey hair", "pale bob cut", "dramatic techwear hair", "brown_bangs", "aqua_bob_cut", "soft spring hair", "multicolored bangs", "black braid", "chinese_hair", "dark_bangs", "silver ponytail", "dramatic summer hair", "white_ponytail", "detailed butler hair", "black drill hair", "purple_drill_hair", "detailed cute hair", "grey_bangs", "black bob cut", "dramatic fantasy hair", "gold_braid", "stylish cat hair", "no bangs", "purple_ponytail", "silver_ponytail", "dark fox hair", "dreamy beautiful hair", "brown hair", "teal bob cut", "dynamic angel hair", "purple_bangs", "detailed spring hair", "dreamy chinese hair", "orange_braid", "silver drill hair", "stylish cool hair", "intense beautiful hair", "stylish idol hair", "soft fantasy hair", "cinematic butler hair", "pink bob cut", "purple drill hair", "cinematic techwear hair", "casual hair", "blue ponytail", "soft fox hair", "gentle dragon hair", "dark twintails", "multicolored_hair", "gentle summer hair", "dark_drill_hair", "intense dragon hair", "intense night hair", "dreamy butler hair", "orange bob cut", "pale braid", "gentle wolf hair", "angel hair", "orange_hair", "cinematic traditional hair", "dynamic bunny hair", "orange_ponytail", "pink_bob_cut", "dreamy wolf hair", "bright winter hair", "detailed sporty hair", "single braid", "pale ponytail", "detailed japanese hair", "dynamic nurse hair", "stylish night hair", "red_drill_hair", "detailed cat hair", "teal_braid", "demon hair", "orange_twintails", "blonde bob cut", "detailed fantasy hair", "dragon hair", "dreamy autumn hair", "white hair", "black_twintails", "purple_hair", "cinematic idol hair", "intense summer hair", "dreamy sporty hair", "red hair", "gentle maid hair", "purple_bob_cut", "yellow bangs", "blue twintails", "dark_ponytail", "gentle idol hair", "white braid", "black twintails", "yellow_hair", "detailed wolf hair", "dark dragon hair", "pale hair", "white_braid", "red_bob_cut", "red sidelocks", "pale_hair", "aqua_twintails", "dark bangs", "pink_bangs", "detailed dragon hair", "red_hair", "blue_ponytail", "dreamy modern hair", "pink twintails", "soft beautiful hair", "stylish chinese hair", "bright sporty hair", "detailed demon hair", "very long hair", "green_twintails", "dynamic casual hair", "bright gothic hair", "fox hair", "exposed forehead", "pink ponytail", "dreamy nurse hair", "blue braid", "silver sidelocks", "silver twintails", "dreamy witch hair", "stylish butler hair", "gentle cool hair", "multicolored bob cut", "orange hair", "butler_hair", "aqua_sidelocks", "soft night hair", "bright elegant hair", "pale_ponytail", "dark angel hair", "multicolored ponytail", "intense elegant hair", "dramatic angel hair", "dramatic winter hair", "soft elegant hair", "grey_drill_hair", "braid", "dynamic night hair", "bright dragon hair", "blue_braid", "stylish modern hair", "blonde_hair", "intense cool hair", "blonde_ponytail", "brown_twintails", "pale drill hair", "intense sporty hair", "intense fantasy hair", "grey ponytail", "blue drill hair", "white sidelocks", "cinematic elegant hair", "dreamy traditional hair", "gentle spring hair", "gentle demon hair", "dramatic beautiful hair", "silver_bangs", "bright cute hair", "detailed witch hair", "pale_twintails", "detailed maid hair", "stylish autumn hair", "dynamic fox hair", "summer_hair", "cinematic summer hair", "autumn hair", "white_sidelocks", "high ponytail", "angel_hair", "silver_twintails", "dark_bob_cut", "short hair", "grey sidelocks", "aqua hair", "multicolored_bob_cut", "yellow drill hair", "dark elegant hair", "dynamic modern hair", "white_drill_hair", "grey_ponytail", "dark beautiful hair", "wolf hair", "short wavy hair", "dynamic chinese hair", "green ponytail", "gentle sporty hair", "pale_bangs", "pale_sidelocks", "stylish nurse hair", "gentle japanese hair", "intense butler hair", "gothic hair", "bright angel hair", "cat_hair", "intense cat hair", "red_twintails", "stylish bunny hair", "pink bangs", "gentle fantasy hair", "bright nurse hair", "cinematic fantasy hair", "stylish maid hair", "dynamic traditional hair", "pale twintails", "soft chinese hair", "dreamy maid hair", "cool_hair", "orange drill hair", "gentle night hair", "pink_braid", "dark_sidelocks", "dynamic beautiful hair", "teal drill hair", "brown sidelocks", "multicolored_ponytail", "white bangs", "twintails", "detailed chinese hair", "purple bob cut", "dreamy demon hair", "aqua_ponytail", "bright modern hair", "black sidelocks", "white drill hair", "soft maid hair", "stylish demon hair", "aqua_bangs", "dynamic cat hair", "stylish elegant hair", "gold_bob_cut", "pink_hair", "dark demon hair", "dreamy fox hair", "cinematic autumn hair", "dynamic butler hair", "blonde sidelocks", "yellow_ponytail", "dramatic traditional hair", "soft idol hair", "intense traditional hair", "bright japanese hair", "dreamy techwear hair", "aqua_drill_hair", "soft butler hair", "detailed traditional hair", "traditional_hair", "gentle gothic hair", "yellow_braid", "yellow_drill_hair", "yellow_sidelocks", "brown_hair", "aqua ponytail", "dramatic wolf hair", "soft cute hair", "brown_bob_cut", "intense spring hair", "dynamic wolf hair", "gold hair", "white_bangs", "dark_hair", "dark butler hair", "dramatic bunny hair", "blue_bob_cut", "blonde hair", "green hair", "dark casual hair", "japanese hair", "bright cat hair", "brown_braid", "straight hair", "pale_bob_cut", "fox_hair", "wavy hair", "intense demon hair", "dynamic gothic hair", "dynamic maid hair", "blonde_twintails", "bright techwear hair", "soft autumn hair", "yellow bob cut", "detailed gothic hair", "dreamy angel hair", "multicolored hair", "purple_twintails", "detailed elegant hair", "purple ponytail", "dragon_hair", "green braid", "dreamy idol hair", "stylish casual hair", "dynamic elegant hair", "aqua_braid", "dreamy cool hair", "blue_drill_hair", "cinematic japanese hair", "pink_twintails", "chinese hair", "cinematic bunny hair", "detailed bunny hair", "gothic_hair", "blue bangs", "gentle cute hair", "yellow twintails", "intense cute hair", "brown_drill_hair", "dynamic cool hair", "dark techwear hair", "dark winter hair", "dark sidelocks", "intense modern hair", "dynamic cute hair", "soft wolf hair", "dramatic japanese hair", "detailed night hair", "intense witch hair", "silver bangs", "multicolored_twintails", "gentle witch hair", "light_braid", "idol_hair", "soft gothic hair", "dramatic modern hair", "stylish wolf hair", "medium hair", "black_bangs", "blonde_bangs", "wolf_hair", "silver_braid", "intense chinese hair", "stylish gothic hair", "soft summer hair", "grey_twintails", "purple_sidelocks", "silver_bob_cut", "red braid", "dark bob cut", "stylish japanese hair", "gentle nurse hair", "cinematic witch hair", "soft traditional hair", "dreamy cat hair", "bright fox hair", "long hair", "gold twintails", "dramatic nurse hair", "dark sporty hair", "witch hair", "pink hair", "red twintails", "detailed beautiful hair", "aqua drill hair", "detailed modern hair", "multicolored sidelocks", "grey_braid", "yellow_bob_cut", "dramatic cat hair", "cinematic casual hair", "blonde_braid", "dynamic summer hair", "gold_hair", "ponytail", "dreamy dragon hair", "silver_drill_hair", "black_bob_cut", "intense angel hair", "silver braid", "intense casual hair", "dark drill hair", "elegant_hair", "cute hair", "green_bob_cut", "dark ponytail", "elegant hair", "blue_bangs", "grey_hair", "aqua twintails", "soft witch hair", "brown twintails", "green bob cut", "orange ponytail", "hair over one eye", "blonde ponytail", "red_braid", "dreamy fantasy hair", "white_hair", "bright traditional hair", "pink_sidelocks", "stylish fantasy hair", "light_twintails", "bright night hair", "dreamy night hair", "green_ponytail", "soft nurse hair", "silver bob cut", "dreamy gothic hair", "multicolored drill hair", "multicolored twintails", "yellow_bangs", "red_sidelocks", "japanese_hair", "green bangs", "dramatic cute hair", "dramatic maid hair", "red bangs", "pink_drill_hair", "grey_sidelocks", "demon_hair", "stylish beautiful hair", "cinematic gothic hair", "multicolored_braid", "blue hair", "white_twintails", "pink sidelocks", "teal_bob_cut", "orange_bangs", "blue_hair", "orange_drill_hair", "intense gothic hair", "brown ponytail", "dreamy winter hair", "orange braid", "soft techwear hair", "dark traditional hair", "dark wolf hair", "teal_bangs", "yellow_twintails", "detailed cool hair", "blonde twintails", "techwear_hair", "cinematic angel hair", "cat hair", "witch_hair", "dynamic dragon hair", "bright beautiful hair", "grey twintails", "grey braid", "night hair", "green drill hair", "dark autumn hair", "blonde drill hair", "bright spring hair", "dark nurse hair", "gentle angel hair", "stylish cute hair", "white ponytail", "cinematic chinese hair", "dreamy spring hair", "gold bob cut", "dramatic butler hair", "bright witch hair", "silver_sidelocks", "traditional hair", "ahoge", "dark idol hair", "grey drill hair", "dramatic cool hair", "cinematic nurse hair", "idol hair", "gold sidelocks", "bright butler hair", "brown bob cut", "modern_hair", "purple twintails", "light_bob_cut", "spring_hair", "red ponytail", "spring hair", "multicolored_bangs", "dramatic casual hair", "maid_hair", "green_braid", "soft sporty hair", "gentle traditional hair", "light_ponytail", "pale sidelocks", "purple sidelocks", "gentle butler hair", "stylish winter hair", "detailed summer hair", "brown bangs", "green sidelocks", "intense japanese hair", "cute_hair", "yellow ponytail", "dramatic fox hair", "gentle elegant hair", "winter_hair", "cinematic sporty hair", "white_bob_cut", "orange_sidelocks", "bright summer hair", "sporty_hair", "blue bob cut", "butler hair", "pale_drill_hair", "gold bangs", "gentle casual hair", "soft dragon hair", "yellow hair", "detailed fox hair", "maid hair", "aqua braid", "black_sidelocks", "teal braid", "detailed techwear hair", "teal ponytail", "side-parted hair", "gentle autumn hair", "teal sidelocks", "cinematic dragon hair", "white twintails", "dreamy elegant hair", "teal_sidelocks", "gold_ponytail", "dramatic autumn hair", "soft angel hair", "dark cute hair", "beautiful_hair", "blue_twintails", "dramatic idol hair", "green_hair", "dark witch hair", "dramatic night hair", "dark japanese hair", "bright bunny hair", "blue sidelocks", "dynamic techwear hair", "dark cat hair", "teal_twintails", "dreamy summer hair", "brown_ponytail", "gold braid", "soft cat hair", "dynamic japanese hair", "dynamic spring hair", "teal_ponytail", "yellow sidelocks", "black hair", "dynamic idol hair", "dramatic witch hair", "detailed nurse hair", "black ponytail", "dark hair", "gentle modern hair", "cinematic winter hair", "grey bob cut", "yellow braid", "dramatic sporty hair", "dramatic gothic hair", "soft bunny hair", "dramatic spring hair", "red bob cut", "soft japanese hair", "sporty hair", "stylish dragon hair", "orange bangs", "stylish spring hair", "bunny_hair", "brown braid", "brown_sidelocks", "dark bunny hair", "dark gothic hair", "light twintails", "bright fantasy hair", "aqua bob cut", "grey_bob_cut", "white bob cut", "dreamy casual hair", "nurse_hair", "bright cool hair", "nurse hair", "dramatic demon hair", "gentle fox hair", "gentle beautiful hair", "light_drill_hair", "dynamic sporty hair", "stylish fox hair", "dark summer hair", "bright idol hair", "gold_sidelocks", "light braid", "bright chinese hair", "pink braid", "cinematic night hair", "dark braid", "aqua_hair", "cinematic wolf hair"], "face": ["dramatic maid smile", "cinematic maid expression", "dark demon eyes", "dreamy casual eyes", "dramatic butler eyes", "sporty_eyes", "soft japanese smile", "dark beautiful eyes", "intense winter smile", "intense maid expression", "bright night expression", "dark techwear expression", "dreamy spring eyes", "dark maid smile", "dramatic cute eyes", "dreamy cat expression", "soft butler eyes", "cinematic dragon eyes", "dark butler expression", "gentle fox eyes", "elegant eyes", "dark idol smile", "dreamy cool eyes", "detailed angel eyes", "dynamic dragon expression", "stylish gothic smile", "cinematic modern expression", "butler_smile", "dark fantasy expression", "techwear_eyes", "stylish summer smile", "cinematic techwear eyes", "detailed cat smile", "stylish maid expression", "brown eyelashes", "witch_expression", "intense chinese eyes", "detailed winter eyes", "light_eyelashes", "detailed dragon expression", "soft chinese expression", "gentle spring expression", "dynamic angel smile", "detailed demon smile", "intense japanese smile", "gentle dragon smile", "dramatic nurse eyes", "dreamy witch expression", "blue eyelashes", "dramatic fantasy expression", "cinematic cute eyes", "bright cute expression", "casual_expression", "dreamy autumn smile", "dreamy cat eyes", "dynamic japanese eyes", "soft cool smile", "cool_expression", "gentle idol eyes", "gentle bunny smile", "blush", "cinematic japanese eyes", "dark chinese expression", "bright modern expression", "gentle elegant expression", "gentle sporty smile", "intense sporty smile", "dreamy demon eyes", "dynamic techwear eyes", "soft spring smile", "dynamic cool smile", "gentle nurse eyes", "dark autumn expression", "dramatic angel expression", "cinematic witch smile", "gentle gothic expression", "intense idol smile", "dynamic nurse smile", "yellow pupils", "stylish nurse smile", "dynamic maid smile", "glasses", "pale_eyelashes", "stylish gothic expression", "techwear_expression", "intense summer smile", "stylish autumn smile", "detailed demon expression", "idol eyes", "traditional_expression", "cinematic winter eyes", "gentle japanese expression", "soft butler expression", "soft night eyes", "soft sporty smile", "black eyes", "dramatic bunny eyes", "soft elegant smile", "soft maid smile", "gentle cool expression", "dreamy techwear smile", "multicolored_eyelashes", "gentle butler eyes", "intense modern smile", "dramatic techwear smile", "bright night eyes", "stylish traditional eyes", "intense japanese eyes", "cat_eyes", "dark traditional smile", "detailed maid expression", "gentle cool smile", "cinematic beautiful eyes", "dramatic traditional smile", "dreamy beautiful eyes", "stylish cool expression", "cinematic sporty eyes", "butler_eyes", "bright sporty smile", "soft autumn eyes", "casual eyes", "detailed fox eyes", "stylish angel expression", "dark cute smile", "bright japanese smile", "dreamy dragon expression", "proud expression", "elegant expression", "dark japanese expression", "dynamic techwear expression", "bright demon expression", "spring_smile", "stylish bunny eyes", "cat_smile", "cinematic cute expression", "soft fox eyes", "dramatic wolf eyes", "detailed butler eyes", "dark gothic eyes", "dynamic night eyes", "yellow_eyes", "black_eyes", "crooked glasses", "bunny_smile", "dynamic fox smile", "dark cat expression", "bright angel eyes", "bright summer eyes", "gentle chinese eyes", "dramatic sporty smile", "soft gothic smile", "dramatic fox eyes", "green_eyes", "beautiful_expression", "stylish dragon smile", "stylish cat eyes", "gentle traditional eyes", "witch smile", "dark elegant expression", "soft wolf expression", "stylish angel eyes", "sleepy expression", "soft fox smile", "cinematic summer expression", "dramatic beautiful eyes", "dreamy fox smile", "soft casual expression", "gentle cat eyes", "detailed nurse smile", "dynamic cool eyes", "grey pupils", "dramatic angel eyes", "dynamic cute eyes", "intense modern eyes", "beautiful expression", "butler eyes", "dark wolf expression", "chinese eyes", "spring expression", "soft night expression", "intense nurse expression", "intense elegant smile", "soft elegant expression", "intense chinese expression", "soft cute eyes", "bright wolf expression", "silver_pupils", "dramatic butler expression", "cinematic dragon expression", "gothic expression", "gentle fantasy smile", "night_expression", "chinese_expression", "dynamic wolf eyes", "blue pupils", "soft beautiful smile", "dynamic fox expression", "cinematic gothic smile", "demon expression", "dynamic traditional smile", "elegant_eyes", "soft japanese expression", "soft spring eyes", "idol_expression", "stylish dragon eyes", "cinematic elegant eyes", "dynamic maid eyes", "detailed angel expression", "soft chinese smile", "gentle nurse smile", "cinematic cat expression", "cinematic angel smile", "gentle spring smile", "sporty_expression", "dynamic fantasy eyes", "bright beautiful smile", "bright maid eyes", "angel smile", "bright cool eyes", "dreamy beautiful smile", "dramatic winter expression", "gentle sporty expression", "gentle techwear expression", "intense dragon expression", "dark summer smile", "intense cute eyes", "intense maid eyes", "dynamic techwear smile", "dramatic night expression", "stylish witch eyes", "intense spring smile", "dark bunny eyes", "soft japanese eyes", "autumn_eyes", "soft angel expression", "dark fox expression", "dramatic cat eyes", "stylish fox smile", "dreamy fantasy eyes", "soft gothic expression", "bright fox expression", "detailed demon eyes", "dark cool eyes", "stylish chinese smile", "dramatic wolf expression", "dramatic summer smile", "cinematic autumn smile", "cinematic cute smile", "bright wolf smile", "soft summer smile", "detailed traditional smile", "red eyes", "dreamy demon smile", "gentle fox smile", "dynamic dragon smile", "gentle wolf eyes", "summer expression", "detailed wolf smile", "detailed japanese smile", "dark nurse smile", "stylish summer eyes", "intense gothic eyes", "black pupils", "bright techwear eyes", "stylish wolf eyes", "cinematic winter expression", "gentle witch expression", "dynamic idol eyes", "bright chinese smile", "cinematic beautiful expression", "soft gothic eyes", "dynamic spring eyes", "cinematic demon eyes", "bright spring smile", "detailed summer eyes", "teasing smile", "intense winter expression", "soft cat eyes", "yellow eyes", "bright witch eyes", "multicolored pupils", "stylish japanese expression", "dreamy witch smile", "detailed spring expression", "bright fox eyes", "pale eyes", "dramatic night smile", "intense fantasy expression", "white eyelashes", "cute eyes", "intense nurse eyes", "dynamic summer eyes", "fantasy smile", "dramatic dragon eyes", "dark demon expression", "grey eyes", "autumn_expression", "bright bunny smile", "cat eyes", "gentle beautiful eyes", "cinematic sporty smile", "intense spring expression", "sporty expression", "bright bunny eyes", "sporty smile", "bright dragon smile", "dark pupils", "detailed fantasy expression", "maid eyes", "soft witch expression", "casual smile", "gentle traditional expression", "dreamy idol smile", "soft idol eyes", "stylish casual eyes", "stylish elegant expression", "winter_smile", "gothic_smile", "bright winter smile", "gentle summer expression", "fox_eyes", "bright autumn expression", "light pupils", "detailed idol expression", "detailed sporty expression", "detailed butler smile", "dreamy sporty expression", "dramatic spring eyes", "dreamy angel eyes", "detailed wolf expression", "dark_pupils", "bright summer smile", "dark maid expression", "dark gothic expression", "cinematic demon smile", "stylish witch expression", "dynamic gothic expression", "witch eyes", "gothic smile", "intense wolf expression", "dreamy maid smile", "cinematic butler eyes", "cinematic fantasy eyes", "purple pupils", "dreamy bunny eyes", "soft winter eyes", "stylish night eyes", "dragon expression", "silver_eyelashes", "stylish winter smile", "dynamic cat eyes", "detailed elegant expression", "soft nurse eyes", "intense fantasy smile", "detailed cat expression", "soft modern eyes", "bright demon smile", "dreamy maid eyes", "aqua pupils", "purple_eyes", "bright wolf eyes", "dramatic chinese expression", "bright fantasy eyes", "dynamic idol expression", "orange eyes", "blonde eyes", "purple eyelashes", "stylish gothic eyes", "stylish summer expression", "dynamic autumn eyes", "dynamic angel expression", "dark sporty smile", "blonde pupils", "bright beautiful eyes", "intense cool eyes", "intense traditional smile", "dreamy bunny smile", "beautiful smile", "dark sporty eyes", "bright demon eyes", "brown_eyes", "dynamic night expression", "dark angel expression", "gentle angel expression", "dreamy cute eyes", "detailed techwear expression", "stylish japanese smile", "modern_eyes", "dramatic demon expression", "natural expression", "soft summer expression", "cinematic beautiful smile", "traditional smile", "autumn smile", "stylish traditional smile", "demon smile", "soft autumn expression", "detailed idol smile", "cute smile", "gentle autumn eyes", "white pupils", "gentle butler expression", "intense maid smile", "stylish demon smile", "teal eyelashes", "intense night smile", "soft fantasy eyes", "dreamy modern expression", "gold_eyelashes", "soft elegant eyes", "dynamic autumn expression", "green eyelashes", "detailed maid eyes", "dreamy autumn expression", "intense autumn smile", "dreamy butler eyes", "dark beautiful smile", "gentle elegant smile", "silver eyelashes", "demon eyes", "bright traditional eyes", "dynamic witch eyes", "soft wolf smile", "stylish cool eyes", "soft bunny smile", "intense demon smile", "intense angel smile", "bright butler eyes", "beautiful_smile", "cool eyes", "soft maid expression", "dark cute eyes", "orange_eyes", "dynamic modern smile", "night smile", "cinematic techwear smile", "dramatic modern eyes", "detailed spring smile", "wolf eyes", "cinematic angel eyes", "cinematic nurse expression", "round glasses", "dreamy witch eyes", "cute_smile", "stylish witch smile", "bright cat eyes", "gentle nurse expression", "stylish cute eyes", "intense casual expression", "gentle witch eyes", "soft beautiful expression", "dreamy casual expression", "dramatic witch smile", "dark winter eyes", "dramatic witch expression", "brown pupils", "dreamy spring smile", "dynamic elegant eyes", "intense beautiful eyes", "gentle demon smile", "dark beautiful expression", "intense fox smile", "gentle cat smile", "dark dragon eyes", "stylish night smile", "bright fantasy smile", "detailed witch smile", "bright idol expression", "intense summer eyes", "dreamy fantasy smile", "stylish spring smile", "dark traditional expression", "flushed face", "cinematic witch expression", "gentle angel smile", "gentle modern smile", "stylish spring eyes", "stylish cute smile", "gold_pupils", "dark fantasy smile", "dramatic cat smile", "detailed cute expression", "dark gothic smile", "gentle beautiful smile", "dreamy sporty smile", "stylish bunny smile", "dynamic sporty eyes", "brown_eyelashes", "intense cute expression", "detailed angel smile", "detailed casual expression", "dreamy summer eyes", "light_pupils", "spring_expression", "cinematic night smile", "purple_pupils", "dark fox eyes", "cinematic butler expression", "detailed night eyes", "bright fox smile", "dramatic cool expression", "detailed witch expression", "intense night expression", "stylish casual smile", "dark modern smile", "gentle casual eyes", "gentle chinese smile", "night_eyes", "pale_eyes", "stylish elegant smile", "cinematic bunny expression", "dark autumn eyes", "cinematic japanese smile", "angel_smile", "cinematic traditional smile", "stylish fantasy expression", "soft smile", "fox smile", "gentle maid smile", "stylish angel smile", "light eyes", "cinematic cool smile", "stylish winter eyes", "dynamic nurse eyes", "detailed dragon eyes", "dynamic witch smile", "gentle cat expression", "blank eyes", "cinematic bunny smile", "dreamy japanese eyes", "stylish techwear eyes", "dreamy chinese eyes", "soft chinese eyes", "fantasy_smile", "dreamy summer smile", "intense butler expression", "stylish maid smile", "teal_pupils", "dreamy techwear eyes", "intense fantasy eyes", "open mouth", "techwear_smile", "dreamy nurse eyes", "dynamic demon smile", "demon_expression", "bright chinese expression", "spring smile", "intense angel expression", "dramatic nurse smile", "dramatic witch eyes", "bright summer expression", "gentle autumn smile", "gold eyes", "dynamic traditional eyes", "winter_eyes", "stylish modern smile", "nurse smile", "gentle elegant eyes", "stylish cat expression", "white_eyes", "multicolored eyes", "detailed nurse eyes", "dynamic sporty expression", "yellow_pupils", "detailed sporty smile", "soft cat smile", "red_eyelashes", "dynamic wolf expression", "cinematic sporty expression", "dramatic cat expression", "cinematic dragon smile", "dreamy cat smile", "techwear expression", "dreamy modern smile", "cinematic angel expression", "dramatic chinese smile", "dynamic cat expression", "sporty eyes", "cinematic casual eyes", "japanese_expression", "detailed witch eyes", "detailed traditional expression", "dramatic beautiful expression", "dramatic cute smile", "cinematic traditional expression", "dramatic traditional eyes", "dark witch smile", "soft witch eyes", "bright butler expression", "intense witch smile", "dramatic nurse expression", "dynamic chinese expression", "dark bunny smile", "detailed cool smile", "detailed wolf eyes", "detailed gothic expression", "teal_eyelashes", "soft bunny expression", "dreamy summer expression", "dynamic bunny smile", "dreamy winter eyes", "cute expression", "stylish cool smile", "bunny eyes", "cinematic summer eyes", "gentle maid expression", "cinematic spring smile", "bright angel expression", "dynamic spring smile", "cinematic fantasy expression", "stylish beautiful eyes", "detailed night expression", "dynamic traditional expression", "dramatic casual eyes", "traditional expression", "gentle night eyes", "detailed chinese smile", "detailed beautiful expression", "stylish butler eyes", "fox eyes", "dramatic beautiful smile", "detailed cat eyes", "bright gothic expression", "dreamy butler smile", "dreamy maid expression", "soft angel smile", "stylish fantasy smile", "dramatic elegant eyes", "detailed gothic eyes", "grey_eyes", "detailed elegant eyes", "detailed techwear smile", "dynamic summer smile", "detailed chinese expression", "cinematic winter smile", "detailed chinese eyes", "blue_eyes", "soft demon smile", "cool_eyes", "gentle idol expression", "dreamy techwear expression", "autumn_smile", "dynamic modern expression", "intense elegant eyes", "cinematic nurse smile", "cool expression", "dark summer expression", "gentle dragon expression", "cool smile", "night eyes", "intense beautiful expression", "dark japanese eyes", "cinematic wolf smile", "fang", "dark elegant smile", "confident smile", "cinematic cool eyes", "cinematic fantasy smile", "dreamy cute expression", "soft cool eyes", "intense traditional eyes", "dramatic dragon smile", "gothic_expression", "soft traditional smile", "dramatic winter eyes", "japanese eyes", "silver eyes", "detailed japanese eyes", "idol smile", "stylish sporty smile", "cinematic chinese eyes", "bright maid expression", "intense techwear expression", "gentle cute expression", "dark cat eyes", "dark fantasy eyes", "stylish demon expression", "dynamic butler eyes", "dreamy wolf smile", "demon_eyes", "intense gothic expression", "bright cute eyes", "cinematic casual smile", "bright dragon eyes", "blue_eyelashes", "dynamic chinese eyes", "dynamic modern eyes", "dynamic japanese smile", "dreamy gothic eyes", "stylish butler smile", "bright sporty eyes", "gentle maid eyes", "wolf smile", "aqua_pupils", "dark chinese eyes", "bright casual expression", "cinematic night eyes", "dark eyelashes", "cinematic idol eyes", "dark modern eyes", "bright autumn eyes", "detailed nurse expression", "casual_smile", "dark cool smile", "soft traditional eyes", "soft casual smile", "stylish chinese expression", "dreamy fox eyes", "dramatic wolf smile", "dark cute expression", "dark witch expression", "stylish wolf expression", "bright modern eyes", "dark idol eyes", "wolf_smile", "embarrassed smile", "soft traditional expression", "blue eyes", "dramatic techwear eyes", "pink eyelashes", "dreamy gothic smile", "intense cat expression", "dynamic dragon eyes", "bright sporty expression", "green_eyelashes", "drooling", "cinematic modern eyes", "orange_pupils", "gentle summer smile", "dramatic japanese expression", "intense traditional expression", "dynamic nurse expression", "intense summer expression", "teal eyes", "cat_expression", "intense elegant expression", "dynamic winter eyes", "dreamy idol expression", "beautiful_eyes", "intense japanese expression", "teary eyes", "dragon smile", "casual expression", "cute_expression", "bright japanese expression", "blonde_eyes", "soft night smile", "dynamic autumn smile", "intense techwear eyes", "stylish casual expression", "stylish demon eyes", "gentle bunny eyes", "half-closed eyes", "dramatic spring smile", "green eyes", "gold pupils", "black_pupils", "dreamy night eyes", "purple_eyelashes", "dreamy nurse expression", "soft fantasy expression", "intense butler eyes", "dreamy demon expression", "stylish traditional expression", "dark casual smile", "soft wolf eyes", "intense cute smile", "cinematic modern smile", "teal_eyes", "gothic eyes", "intense demon eyes", "cinematic butler smile", "cinematic nurse eyes", "stylish butler expression", "dramatic autumn expression", "blonde_pupils", "dreamy wolf eyes", "stylish fox eyes", "dynamic casual eyes", "soft modern expression", "dreamy modern eyes", "intense idol eyes", "stylish modern expression", "spring_eyes", "dreamy elegant eyes", "grey_eyelashes", "yellow eyelashes", "soft modern smile", "pink_pupils", "dark fox smile", "blue_pupils", "green_pupils", "dreamy chinese smile", "chinese_smile", "dynamic beautiful eyes", "angel_eyes", "stylish autumn expression", "dark eyes", "dramatic sporty expression", "orange eyelashes", "intense chinese smile", "soft fox expression", "spring eyes", "round eyes", "idol expression", "dreamy butler expression", "dramatic japanese eyes", "bright cat expression", "dramatic cool smile", "witch expression", "dark_eyes", "detailed cute smile", "soft dragon eyes", "teal pupils", "cinematic traditional eyes", "dynamic cat smile", "bunny_expression", "light_eyes", "dynamic winter expression", "dreamy fantasy expression", "stylish idol smile", "detailed cute eyes", "dreamy elegant expression", "stylish fox expression", "intense nurse smile", "detailed bunny smile", "aqua_eyelashes", "intense sporty expression", "detailed casual eyes", "dramatic gothic smile", "winter_expression", "japanese_smile", "intense beautiful smile", "green pupils", "dark dragon smile", "bright maid smile", "dreamy traditional expression", "dark casual eyes", "cinematic autumn eyes", "intense casual smile", "detailed elegant smile", "intense bunny eyes", "soft spring expression", "dynamic night smile", "multicolored_pupils", "dramatic modern expression", "brown eyes", "orange_eyelashes", "soft techwear smile", "stylish wolf smile", "bright elegant smile", "stylish winter expression", "cinematic maid smile", "gentle cute smile", "soft butler smile", "gentle autumn expression", "gentle traditional smile", "dark witch eyes", "angel eyes", "butler expression", "intense fox eyes", "black_eyelashes", "dynamic angel eyes", "dramatic gothic expression", "gentle winter eyes", "soft cat expression", "blonde_eyelashes", "dramatic dragon expression", "dark modern expression", "intense winter eyes", "stylish cute expression", "witch_eyes", "bright cool smile", "cinematic gothic expression", "dynamic sporty smile", "dramatic sporty eyes", "dynamic gothic eyes", "dragon_expression", "dark casual expression", "intense cat smile", "soft cute smile", "dreamy japanese smile", "stylish dragon expression", "dynamic fox eyes", "bright cool expression", "soft fantasy smile", "dreamy idol eyes", "japanese expression", "fantasy_eyes", "fox_expression", "cinematic cool expression", "dramatic techwear expression", "gentle japanese eyes", "dark butler eyes", "dragon_eyes", "bright bunny expression", "stylish spring expression", "grey_pupils", "detailed fox expression", "intense autumn expression"], "clothing": ["grey_swimsuit", "dark gothic uniform", "stylish fantasy outfit", "dreamy autumn uniform", "blonde jacket", "dreamy night uniform", "dreamy bunny uniform", "techwear_dress", "light dress", "dark fox outfit", "casual_dress", "grey_yukata", "gentle angel outfit", "bright cute dress", "intense cute dress", "dreamy elegant outfit", "bright techwear outfit", "chinese dress", "white_skirt", "soft modern dress", "dynamic fox uniform", "beautiful dress", "blue_sleeves", "blue_hoodie", "dark_swimsuit", "brown_shirt", "teal kimono", "blonde_kimono", "brown sleeves", "gentle wolf dress", "multicolored thighhighs", "intense wolf dress", "gentle dragon uniform", "red_boots", "cinematic gothic dress", "dramatic witch outfit", "multicolored_yukata", "detailed modern outfit", "dark dragon outfit", "soft butler outfit", "cinematic wolf uniform", "dreamy fantasy outfit", "blue_socks", "gold bikini", "detailed modern dress", "blue bikini", "dark autumn dress", "black skirt", "dramatic idol dress", "gold jacket", "stylish sporty dress", "gold_jacket", "blonde bikini", "dark casual uniform", "blue hoodie", "purple_lingerie", "red qipao", "stylish traditional uniform", "blue coat", "dynamic summer outfit", "white_swimsuit", "dreamy night dress", "yellow kimono", "red coat", "silver qipao", "white_gloves", "dreamy sporty outfit", "dramatic elegant uniform", "cinematic cool uniform", "light boots", "bright winter uniform", "cute_uniform", "bright night uniform", "yellow_hoodie", "teal_kimono", "pink lingerie", "detailed nurse uniform", "green sleeves", "light socks", "cinematic wolf outfit", "idol dress", "dark cat outfit", "yellow_thighhighs", "orange_jacket", "autumn uniform", "dreamy wolf uniform", "bunny_uniform", "red lingerie", "dark_boots", "pink_shirt", "dark witch outfit", "stylish fantasy dress", "intense gothic outfit", "dynamic witch dress", "gold_coat", "detailed nurse dress", "gentle dragon outfit", "traditional_outfit", "cinematic winter outfit", "dreamy summer dress", "aqua_thighhighs", "dark maid dress", "dynamic modern dress", "stylish winter uniform", "intense maid outfit", "soft summer uniform", "light capelet", "dreamy elegant uniform", "light qipao", "dark winter uniform", "cinematic witch outfit", "dynamic sporty outfit", "soft witch uniform", "pink_socks", "green_capelet", "bright summer outfit", "orange_capelet", "intense bunny outfit", "detailed casual uniform", "cool_uniform", "dynamic idol dress", "detailed fox uniform", "detailed autumn uniform", "dramatic idol outfit", "teal sleeves", "gentle winter outfit", "soft cool dress", "dreamy cute dress", "dreamy beautiful uniform", "dynamic cute dress", "dynamic angel uniform", "green_kimono", "casual_outfit", "multicolored_thighhighs", "stylish modern uniform", "orange shirt", "gentle autumn dress", "green skirt", "dramatic bunny uniform", "dark cat uniform", "aqua sleeves", "bright traditional uniform", "dramatic japanese dress", "gold yukata", "grey gloves", "gold_sweater", "cinematic cool dress", "soft dragon outfit", "blonde_shirt", "red sleeves", "dark sporty outfit", "dynamic traditional outfit", "soft fox dress", "white_kimono", "pale swimsuit", "blue socks", "dynamic cat uniform", "bright butler outfit", "summer_outfit", "detailed cute uniform", "gentle cat dress", "yellow_skirt", "summer outfit", "detailed cool outfit", "dynamic spring outfit", "red thighhighs", "gentle cool dress", "intense traditional uniform", "black sleeves", "dark witch dress", "intense dragon dress", "cool_outfit", "soft elegant outfit", "orange coat", "dark techwear uniform", "dreamy butler outfit", "idol_uniform", "purple_boots", "aqua lingerie", "detailed autumn outfit", "fantasy dress", "cinematic beautiful dress", "gentle autumn uniform", "dark cute outfit", "red_jacket", "pink_jacket", "light lingerie", "dramatic cat uniform", "dark boots", "orange_bikini", "green_bikini", "pink capelet", "soft spring uniform", "intense japanese outfit", "detailed beautiful uniform", "light_sweater", "bright angel dress", "dreamy butler uniform", "cinematic fox outfit", "dynamic elegant outfit", "gentle traditional outfit", "detailed cute outfit", "detailed japanese dress", "dynamic butler outfit", "soft japanese outfit", "idol outfit", "gentle maid uniform", "bright spring outfit", "soft traditional outfit", "silver lingerie", "orange swimsuit", "dark coat", "stylish maid outfit", "intense chinese outfit", "dynamic night dress", "red boots", "teal shirt", "bright beautiful uniform", "multicolored sweater", "stylish winter dress", "yellow sleeves", "night outfit", "dreamy bunny dress", "stylish sporty uniform", "bright elegant dress", "dreamy traditional outfit", "dynamic elegant dress", "dark angel uniform", "gentle sporty uniform", "stylish summer outfit", "gold socks", "summer uniform", "nurse_uniform", "detailed witch dress", "dynamic wolf outfit", "dramatic witch uniform", "blue boots", "teal boots", "cinematic casual uniform", "yellow_gloves", "blonde capelet", "gentle night dress", "intense modern outfit", "bright maid uniform", "beautiful outfit", "gentle fantasy uniform", "yellow_lingerie", "black_socks", "modern uniform", "winter outfit", "yellow_socks", "blonde_yukata", "dynamic chinese dress", "chinese_outfit", "cinematic cat dress", "intense witch uniform", "dark japanese uniform", "dramatic cute uniform", "dreamy modern dress", "green_yukata", "detailed demon dress", "teal_sweater", "soft summer outfit", "intense japanese dress", "black_yukata", "dreamy witch outfit", "pink_dress", "intense sporty outfit", "orange_shirt", "grey_qipao", "bright elegant uniform", "angel_dress", "dreamy casual uniform", "modern_dress", "dramatic maid uniform", "beautiful_uniform", "blonde gloves", "cinematic traditional uniform", "aqua_socks", "dark techwear outfit", "soft witch outfit", "gentle cool uniform", "beautiful uniform", "intense cool outfit", "bright witch uniform", "silver_gloves", "dark jacket", "intense idol outfit", "stylish summer uniform", "soft summer dress", "gentle traditional uniform", "grey yukata", "dreamy gothic outfit", "cinematic beautiful uniform", "dragon_outfit", "bright techwear dress", "intense winter outfit", "cinematic modern outfit", "dramatic sporty outfit", "teal bikini", "dark nurse outfit", "light_swimsuit", "black_sleeves", "oversized jacket", "detailed maid dress", "dramatic fantasy dress", "grey_jacket", "aqua_capelet", "gold gloves", "blonde thighhighs", "light yukata", "bright cute outfit", "dreamy fantasy uniform", "dark summer outfit", "japanese_dress", "aqua_lingerie", "dark fox dress", "dreamy maid outfit", "brown_hoodie", "stylish demon outfit", "dreamy chinese uniform", "white_shirt", "detailed sporty dress", "pale_lingerie", "detailed techwear uniform", "black socks", "white jacket", "dynamic cat dress", "teal_boots", "dark butler uniform", "dramatic casual dress", "bright cool dress", "gentle elegant outfit", "dark bunny outfit", "gold_skirt", "gentle winter uniform", "dark fantasy outfit", "blonde dress", "dramatic bunny outfit", "dynamic butler uniform", "purple gloves", "brown dress", "bright beautiful dress", "dark hoodie", "multicolored skirt", "dramatic night dress", "dramatic modern uniform", "bright gothic uniform", "dark cute dress", "grey_skirt", "stylish angel uniform", "yellow_swimsuit", "orange_skirt", "bright sporty dress", "soft wolf uniform", "detailed casual outfit", "dynamic japanese dress", "gentle elegant dress", "dramatic nurse uniform", "shirt open", "pale_shirt", "bright maid outfit", "dreamy traditional uniform", "stylish dragon outfit", "teal_dress", "orange qipao", "white shirt", "pale capelet", "grey thighhighs", "dramatic demon uniform", "dark modern uniform", "detailed sporty outfit", "green socks", "cinematic cute uniform", "gentle night outfit", "teal_skirt", "intense wolf uniform", "dramatic fox dress", "bright autumn uniform", "wolf_outfit", "cinematic summer uniform", "dramatic winter uniform", "intense winter dress", "pink qipao", "white swimsuit", "cinematic night outfit", "fox uniform", "dark autumn outfit", "sporty uniform", "intense fantasy uniform", "cinematic summer outfit", "black_skirt", "teal sweater", "dark autumn uniform", "intense witch dress", "aqua_sleeves", "brown_lingerie", "intense beautiful dress", "pale_coat", "brown_jacket", "stylish fox uniform", "pale kimono", "dynamic nurse uniform", "dynamic nurse outfit", "green swimsuit", "orange_sleeves", "pink skirt", "cute uniform", "brown skirt", "green_jacket", "green_swimsuit", "dark lingerie", "dreamy idol outfit", "pink_gloves", "autumn dress", "soft wolf outfit", "silver_socks", "silver_thighhighs", "white qipao", "dynamic butler dress", "dark elegant uniform", "dark summer uniform", "white kimono", "silver sweater", "multicolored_capelet", "night uniform", "stylish night outfit", "cinematic angel outfit", "dynamic maid dress", "pink thighhighs", "intense techwear outfit", "intense fantasy outfit", "bright traditional dress", "soft sporty outfit", "bright japanese uniform", "bright demon outfit", "dramatic casual outfit", "pale_skirt", "grey_hoodie", "white_dress", "fox outfit", "multicolored_shirt", "intense cool uniform", "purple boots", "dreamy dragon outfit", "intense cat uniform", "yellow_yukata", "pink_yukata", "stylish butler outfit", "white dress", "soft casual uniform", "cinematic demon uniform", "gold_sleeves", "cinematic autumn uniform", "dramatic witch dress", "bright modern outfit", "pale sleeves", "dreamy techwear dress", "soft spring dress", "intense bunny uniform", "bright casual outfit", "dark butler outfit", "brown boots", "cinematic nurse uniform", "teal_shirt", "green gloves", "detailed gothic dress", "cinematic idol dress", "aqua capelet", "gold skirt", "green thighhighs", "grey dress", "brown capelet", "brown yukata", "cinematic bunny uniform", "dynamic night uniform", "bright winter outfit", "cinematic fox uniform", "dark sleeves", "dramatic traditional uniform", "cinematic wolf dress", "dark gothic dress", "dreamy nurse uniform", "gentle butler outfit", "autumn outfit", "light_capelet", "cinematic japanese outfit", "dynamic dragon dress", "blue sweater", "cinematic cute dress", "dark socks", "bright dragon uniform", "multicolored shirt", "stylish witch outfit", "black hoodie", "black sweater", "gentle idol outfit", "pinstripe pants", "demon_outfit", "stylish casual outfit", "dreamy modern uniform", "dramatic cat dress", "dark casual dress", "maid_dress", "dark fox uniform", "bright nurse dress", "stylish beautiful uniform", "dynamic beautiful uniform", "cool uniform", "pink_kimono", "winter_dress", "silver shirt", "dynamic japanese outfit", "silver swimsuit", "gentle gothic outfit", "dramatic elegant dress", "dreamy spring dress", "dramatic chinese dress", "light coat", "dark yukata", "blonde lingerie", "pale_boots", "grey_coat", "brown_bikini", "pale_capelet", "purple_bikini", "aqua_dress", "blonde sweater", "green coat", "multicolored swimsuit", "purple_dress", "purple_yukata", "fantasy_outfit", "gentle nurse outfit", "pink swimsuit", "dynamic spring dress", "light_boots", "dreamy angel outfit", "aqua thighhighs", "blue_skirt", "bright dragon outfit", "gentle idol uniform", "gentle gothic uniform", "white skirt", "detailed wolf outfit", "dreamy japanese dress", "detailed butler outfit", "multicolored lingerie", "purple jacket", "dreamy cat uniform", "dramatic casual uniform", "dreamy angel uniform", "soft sporty dress", "dynamic cool uniform", "purple_capelet", "grey_lingerie", "dark casual outfit", "detailed idol outfit", "pale_swimsuit", "teal_coat", "nurse dress", "casual dress", "maid_outfit", "yellow shirt", "dramatic spring uniform", "pinstripe suit", "bright cat dress", "red kimono", "dramatic nurse outfit", "cinematic maid uniform", "stylish dragon dress", "silver_kimono", "night_dress", "dreamy wolf dress", "stylish spring dress", "pale shirt", "detailed winter dress", "bright spring uniform", "stylish demon uniform", "orange_dress", "dramatic chinese uniform", "light swimsuit", "grey_capelet", "gentle winter dress", "nurse uniform", "detailed night outfit", "brown jacket", "black gloves", "stylish gothic dress", "cinematic maid outfit", "black kimono", "dreamy summer uniform", "cinematic casual outfit", "witch outfit", "grey hoodie", "light hoodie", "dreamy maid uniform", "stylish spring outfit", "gold capelet", "dynamic techwear uniform", "dark elegant outfit", "soft idol uniform", "traditional outfit", "bright autumn dress", "detailed fantasy outfit", "stylish techwear outfit", "dark gloves", "fox_dress", "intense casual dress", "light shirt", "dreamy witch dress", "white_thighhighs", "grey_dress", "dark butler dress", "dark bunny dress", "detailed dragon outfit", "detailed beautiful dress", "intense autumn uniform", "gentle japanese outfit", "chinese_uniform", "silver_hoodie", "dark chinese outfit", "sporty outfit", "soft autumn outfit", "dramatic fantasy uniform", "autumn_dress", "gentle sporty outfit", "dynamic bunny dress", "brown_sleeves", "dynamic winter outfit", "summer dress", "yellow_bikini", "detailed japanese outfit", "intense summer uniform", "gentle casual outfit", "blue_coat", "stylish nurse dress", "intense beautiful uniform", "purple_sweater", "bright gothic outfit", "dreamy angel dress", "soft chinese outfit", "dark dragon uniform", "pale_thighhighs", "grey_thighhighs", "cat_dress", "blue_thighhighs", "beautiful_outfit", "soft winter uniform", "dramatic summer dress", "gentle sporty dress", "teal socks", "dark chinese dress", "blonde qipao", "light_sleeves", "purple swimsuit", "stylish angel dress", "dark cat dress", "gold dress", "dynamic maid outfit", "silver_lingerie", "cinematic summer dress", "grey socks", "gentle gothic dress", "cinematic dragon dress", "purple qipao", "butler_dress", "cinematic cute outfit", "chinese uniform", "gentle modern outfit", "cinematic traditional outfit", "red_coat", "red gloves", "dark angel outfit", "stylish maid dress", "detailed beautiful outfit", "teal qipao", "butler dress", "soft bunny uniform", "bright techwear uniform", "pale_hoodie", "gentle summer uniform", "blue_boots", "bright cool outfit", "dynamic fox outfit", "grey capelet", "cool_dress", "dynamic fantasy dress", "silver coat", "yellow hoodie", "light skirt", "detailed bunny dress", "dark kimono", "blue lingerie", "blue_dress", "cinematic sporty dress", "purple_socks", "silver hoodie", "blue_gloves", "dreamy dragon uniform", "angel outfit", "grey skirt", "multicolored_coat", "soft angel uniform", "intense butler dress", "cinematic fantasy uniform", "bright fox dress", "pale_qipao", "purple_kimono", "soft traditional dress", "orange capelet", "multicolored_jacket", "gold coat", "cinematic butler outfit", "blonde_skirt", "intense elegant dress", "detailed gothic outfit", "pink_sleeves", "blue dress", "silver sleeves", "casual uniform", "yellow_jacket", "multicolored kimono", "butler_uniform", "dark elegant dress", "red_dress", "dramatic techwear outfit", "stylish dragon uniform", "brown_coat", "purple yukata", "bunny outfit", "soft chinese uniform", "bright casual dress", "dynamic casual dress", "red_bikini", "dark_sleeves", "red_swimsuit", "detailed nurse outfit", "green jacket", "detailed cool uniform", "dramatic night outfit", "soft winter dress", "light_bikini", "black_gloves", "silver_dress", "green_qipao", "bright demon dress", "detailed night uniform", "dramatic gothic uniform", "multicolored_skirt", "cat outfit", "soft chinese dress", "blue_lingerie", "dynamic chinese outfit", "stylish butler dress", "silver_qipao", "white lingerie", "intense chinese dress", "blue jacket", "cinematic night uniform", "brown_thighhighs", "grey_sleeves", "intense cute outfit", "cinematic modern dress", "green yukata", "cinematic gothic outfit", "pink_boots", "oversized sleeves", "soft demon uniform", "dark_skirt", "soft fantasy dress", "stylish japanese outfit", "stylish elegant dress", "red_hoodie", "gentle witch uniform", "bright wolf dress", "gold_hoodie", "dark dragon dress", "detailed cool dress", "intense traditional outfit", "dark cool uniform", "dramatic dragon outfit", "cute_outfit", "intense cat outfit", "blue capelet", "cinematic butler dress", "yellow jacket", "dark beautiful dress", "soft fox uniform", "black_capelet", "soft nurse outfit", "multicolored coat", "orange sleeves", "gothic dress", "dark_capelet", "cinematic elegant dress", "gentle bunny dress", "blonde_thighhighs", "pale sweater", "intense techwear uniform", "grey_boots", "dramatic chinese outfit", "dynamic demon dress", "soft winter outfit", "dark cool dress", "blue_yukata", "winter dress", "teal thighhighs", "pink socks", "detailed traditional outfit", "light sleeves", "gentle summer outfit", "dreamy modern outfit", "red sweater", "purple_jacket", "blue skirt", "dreamy nurse dress", "dark idol outfit", "dreamy autumn dress", "stylish techwear dress", "dynamic idol uniform", "dark maid outfit", "dark swimsuit", "stylish elegant uniform", "bright chinese dress", "japanese outfit", "intense idol dress", "gentle wolf uniform", "black capelet", "idol uniform", "grey qipao", "cinematic winter dress", "soft cat outfit", "detailed chinese dress", "cool outfit", "black_bikini", "detailed summer uniform", "dark capelet", "stylish summer dress", "dreamy witch uniform", "light_qipao", "detailed bunny outfit", "white bikini", "pink_qipao", "pink_thighhighs", "orange_swimsuit", "black yukata", "dramatic butler uniform", "bright sporty uniform", "blonde_bikini", "cinematic bunny dress", "dramatic winter dress", "soft gothic dress", "orange lingerie", "intense techwear dress", "skirt lifted", "intense gothic uniform", "light_skirt", "bright japanese outfit", "nurse_dress", "dreamy cat dress", "dark shirt", "intense fox outfit", "soft beautiful outfit", "dark_thighhighs", "grey_kimono", "brown hoodie", "bright idol uniform", "bunny_dress", "brown lingerie", "elegant outfit", "cinematic sporty uniform", "soft cute dress", "pink sleeves", "gentle demon dress", "dreamy cool uniform", "soft night uniform", "light sweater", "black lingerie", "intense angel uniform", "detailed japanese uniform", "bright chinese outfit", "aqua jacket", "autumn_uniform", "gentle cool outfit", "gentle japanese uniform", "grey lingerie", "dynamic night outfit", "bright wolf uniform", "dark cool outfit", "sleeves past fingers", "intense fox uniform", "black_qipao", "yellow bikini", "intense bunny dress", "dreamy japanese outfit", "pale gloves", "dreamy demon uniform", "dreamy japanese uniform", "yellow swimsuit", "dynamic casual outfit", "open clothes", "blue thighhighs", "dark winter outfit", "dynamic witch outfit", "intense butler outfit", "white_capelet", "pale_socks", "dynamic fantasy uniform", "brown thighhighs", "silver_yukata", "soft nurse uniform", "dynamic casual uniform", "teal yukata", "brown sweater", "dark wolf dress", "multicolored_lingerie", "teal hoodie", "intense spring uniform", "blonde_sleeves", "dynamic gothic outfit", "blue shirt", "black_swimsuit", "intense witch outfit", "bunny_outfit", "cinematic beautiful outfit", "gold_shirt", "orange dress", "soft fantasy uniform", "black dress", "orange_gloves", "stylish winter outfit", "stylish cute dress", "pale yukata", "multicolored_bikini", "pink_coat", "pale jacket", "detailed witch outfit", "orange jacket", "blue kimono", "silver_swimsuit", "cinematic spring dress", "blonde_hoodie", "soft japanese uniform", "brown_socks", "yellow_sleeves", "pale_gloves", "shrine maiden outfit", "detailed spring uniform", "gentle bunny uniform", "yellow gloves", "multicolored_qipao", "bright sporty outfit", "pink shirt", "stylish chinese uniform", "intense beautiful outfit", "stylish beautiful outfit", "light_dress", "pale dress", "blonde_socks", "silver kimono", "gentle cat uniform", "soft night outfit", "aqua yukata", "white_boots", "dark_socks", "dark_kimono", "white_lingerie", "cinematic fantasy outfit", "cinematic bunny outfit", "dramatic beautiful uniform", "dark sporty dress", "dynamic winter uniform", "green dress", "purple_coat", "dark_yukata", "aqua_bikini", "white gloves", "teal capelet", "dynamic dragon uniform", "dramatic fox uniform", "pale skirt", "brown_yukata", "dramatic autumn uniform", "pale thighhighs", "dynamic demon uniform", "wolf_dress", "green_sweater", "soft fox outfit", "orange_coat", "light jacket", "modern outfit", "gold qipao", "gentle fox uniform", "soft nurse dress", "dramatic cat outfit", "silver capelet", "yellow_kimono", "dreamy cool outfit", "dramatic elegant outfit", "orange_socks", "blue_bikini", "detailed winter uniform", "blue gloves", "intense autumn outfit", "idol_outfit", "multicolored sleeves", "white_coat", "dark demon dress", "dynamic angel outfit", "bright beautiful outfit", "cinematic casual dress", "dark techwear dress", "dynamic spring uniform", "detailed wolf uniform", "green qipao", "silver jacket", "teal dress", "demon_uniform", "teal_thighhighs", "dramatic spring outfit", "black swimsuit", "brown_boots", "dramatic modern dress", "dramatic sporty uniform", "white_yukata", "pink_capelet", "dark beautiful outfit", "butler uniform", "dynamic chinese uniform", "black_lingerie", "dramatic winter outfit", "gentle casual uniform", "cinematic chinese outfit", "witch uniform", "teal skirt", "detailed gothic uniform", "intense cool dress", "dramatic autumn outfit", "cinematic spring outfit", "multicolored socks", "stylish witch uniform", "multicolored bikini", "blue qipao", "intense night outfit", "gentle casual dress", "cinematic elegant uniform", "soft maid dress", "aqua_shirt", "gothic_uniform", "intense modern uniform", "intense summer dress", "red bikini", "red hoodie", "techwear dress", "stylish spring uniform", "soft modern outfit", "bright nurse uniform", "beautiful_dress", "japanese uniform", "witch_dress", "stylish cute outfit", "dragon_uniform", "detailed cat dress", "pink_hoodie", "soft japanese dress", "blue_capelet", "purple coat", "orange hoodie", "gold_socks", "bright butler uniform", "stylish gothic outfit", "soft autumn uniform", "dreamy beautiful dress", "dragon_dress", "blonde skirt", "detailed maid uniform", "hidden hands", "detailed wolf dress", "blonde coat", "dreamy casual dress", "cinematic traditional dress", "red_lingerie", "intense cat dress", "intense nurse dress", "intense dragon uniform", "stylish night dress", "green_thighhighs", "dynamic sporty dress", "soft dragon uniform", "orange sweater", "cute dress", "elegant_dress", "stylish idol uniform", "dramatic techwear dress", "black thighhighs", "blue_qipao", "dreamy fox uniform", "stylish japanese dress", "dragon uniform", "gold_gloves", "purple_shirt", "dramatic nurse dress", "bright autumn outfit", "detailed traditional uniform", "purple hoodie", "bright wolf outfit", "aqua coat", "white coat", "purple shirt", "stylish cute uniform", "cinematic angel uniform", "cinematic idol uniform", "gentle cute outfit", "yellow sweater", "intense modern dress", "dynamic autumn uniform", "dramatic beautiful dress", "blonde_qipao", "night_uniform", "dynamic nurse dress", "multicolored_boots", "dynamic cute outfit", "intense traditional dress", "cinematic autumn outfit", "soft spring outfit", "gentle beautiful uniform", "dramatic cute outfit", "gentle spring uniform", "green boots", "cinematic cat outfit", "intense casual uniform", "pale hoodie", "soft idol dress", "soft butler uniform", "intense maid dress", "butler outfit", "aqua sweater", "stylish nurse outfit", "wolf dress", "orange_lingerie", "pink_skirt", "cute outfit", "thighhighs", "white_jacket", "dreamy chinese outfit", "dynamic bunny outfit", "dynamic autumn dress", "aqua_hoodie", "intense demon dress", "gentle fox outfit", "blonde socks", "spring_uniform", "pink_sweater", "aqua_kimono", "brown_dress", "pale boots", "stylish fox outfit", "green_shirt", "dynamic cute uniform", "dramatic summer uniform", "gold_bikini", "gentle spring dress", "bright winter dress", "dynamic beautiful dress", "dramatic angel outfit", "gentle cute dress", "light kimono", "cinematic techwear uniform", "stylish night uniform", "aqua shirt", "dark_qipao", "brown_swimsuit", "orange_kimono", "intense cute uniform", "yellow lingerie", "soft wolf dress", "dark summer dress", "orange_qipao", "purple_hoodie", "dreamy techwear outfit", "grey coat", "intense angel outfit", "dark beautiful uniform", "dreamy fox outfit", "dramatic techwear uniform", "dark traditional outfit", "dreamy butler dress", "soft beautiful dress", "gentle wolf outfit", "aqua_skirt", "pale_sweater", "dynamic cool dress", "purple_thighhighs", "gentle butler uniform", "pink sweater", "dark_coat", "bright japanese dress", "teal_lingerie", "pink yukata", "purple_swimsuit", "dreamy winter uniform", "dynamic dragon outfit", "fox_uniform", "white socks", "bright cat uniform", "dark maid uniform", "teal_socks", "teal_yukata", "gentle demon uniform", "green hoodie", "dynamic summer uniform", "dark sweater", "stylish wolf dress", "detailed idol dress", "stylish modern outfit", "detailed traditional dress", "detailed modern uniform", "dramatic night uniform", "black qipao", "aqua hoodie", "dark_gloves", "soft casual dress", "gentle chinese dress", "red_sweater", "red shirt", "stylish autumn outfit", "detailed angel uniform", "stylish bunny uniform", "bright fox uniform", "intense demon uniform", "white hoodie", "gentle summer dress", "bright cool uniform", "dreamy elegant dress", "blonde sleeves", "japanese dress", "gold_boots", "soft maid uniform", "spring_outfit", "dark japanese dress", "stylish chinese dress", "purple kimono", "dynamic summer dress", "dark sporty uniform", "bright bunny outfit", "blue_kimono", "dramatic butler outfit", "detailed angel outfit", "green sweater", "silver_capelet", "purple bikini", "dark demon outfit", "teal_qipao", "bright nurse outfit", "dark idol dress", "gold kimono", "dynamic japanese uniform", "detailed angel dress", "intense elegant outfit", "dramatic wolf uniform", "summer_dress", "autumn_outfit", "intense dragon outfit", "night dress", "purple skirt", "white yukata", "cinematic autumn dress", "white_qipao", "aqua_boots", "dreamy cute outfit", "wolf uniform", "dreamy winter outfit", "bright idol outfit", "gothic outfit", "green_socks", "green_lingerie", "cat dress", "yellow_boots", "cinematic techwear dress", "bright elegant outfit", "pale socks", "fox dress", "black shirt", "yellow_qipao", "soft techwear outfit", "knee socks", "cinematic modern uniform", "gentle cute uniform", "light bikini", "gentle maid outfit", "orange_hoodie", "green kimono", "bright fantasy uniform", "techwear uniform", "dreamy beautiful outfit", "techwear outfit", "cat uniform", "intense japanese uniform", "green_coat"], "accessory": ["black mask", "blue hair ornament", "choker", "brown_hairclip", "pink hairclip", "blonde_necklace", "green scarf", "yellow_earrings", "teal earrings", "teal mask", "light scarf", "yellow hair ornament", "blue_glasses", "purple hairclip", "pink necklace", "white mask", "aqua earrings", "dark bow", "purple_hair_ornament", "brown_mask", "pale hat", "silver earrings", "teal necklace", "silver belt", "green_mask", "blue_bow", "multicolored_glasses", "red_hair_ornament", "multicolored_belt", "grey_belt", "silver_hairclip", "red belt", "light_earrings", "light hair ornament", "pale_scarf", "orange_hair_ornament", "green belt", "yellow_hat", "yellow scarf", "white_necklace", "purple_glasses", "pale bow", "orange scarf", "grey_mask", "orange_hairclip", "dark hairclip", "pale mask", "black_glasses", "purple_hairclip", "white_hairclip", "white_earrings", "pink_ribbon", "yellow earrings", "light mask", "heart-shaped eye device", "white ribbon", "yellow_glasses", "dark necklace", "green ribbon", "white earrings", "dark_necklace", "green_hair_ornament", "purple scarf", "grey earrings", "gold hair ornament", "purple_mask", "silver_bow", "grey_bow", "silver hair ornament", "teal_scarf", "orange belt", "brown necklace", "multicolored hair ornament", "dark_ribbon", "orange bow", "blonde glasses", "blonde belt", "blonde mask", "black_belt", "silver_scarf", "silver glasses", "purple earrings", "teal bow", "brown_ribbon", "blue mask", "gold_hat", "grey_scarf", "yellow mask", "dark glasses", "aqua hairclip", "pink hair ornament", "dark earrings", "pale earrings", "teal_mask", "purple_belt", "red mask", "green_hat", "black_hairclip", "brown hat", "light glasses", "light hat", "teal belt", "brown_hat", "red_earrings", "yellow_mask", "red_hat", "blonde_mask", "pink scarf", "orange earrings", "dark_hat", "red bow", "light_hairclip", "pale scarf", "aqua_earrings", "gold_hairclip", "silver hairclip", "pale_mask", "light_glasses", "orange_hat", "blue_necklace", "gold_scarf", "pink glasses", "blonde hair ornament", "black ribbon", "green hair ornament", "grey scarf", "purple_necklace", "white bow", "multicolored_scarf", "dark scarf", "green_belt", "grey_hairclip", "orange_earrings", "blue glasses", "blue_ribbon", "light earrings", "green_scarf", "blue bow", "silver hat", "gold_necklace", "gold_hair_ornament", "aqua_hat", "green bow", "red_ribbon", "blonde_glasses", "grey hairclip", "grey_earrings", "black_scarf", "green_ribbon", "brown_hair_ornament", "white_glasses", "silver_hat", "multicolored hat", "aqua_necklace", "yellow hat", "green_earrings", "teal_bow", "aqua necklace", "pink bow", "dark_hairclip", "pink_hair_ornament", "grey_necklace", "gold ribbon", "gold scarf", "white hair ornament", "dark hat", "orange_glasses", "blonde_hairclip", "pale_hairclip", "yellow_scarf", "yellow_bow", "aqua_belt", "blonde_belt", "teal_necklace", "black_hat", "pink_belt", "light_belt", "black_ribbon", "white_mask", "light_mask", "yellow ribbon", "multicolored scarf", "silver_necklace", "orange hairclip", "brown hair ornament", "blonde ribbon", "white hat", "orange ribbon", "grey ribbon", "multicolored_earrings", "gold earrings", "multicolored_hairclip", "grey bow", "aqua hair ornament", "light_bow", "blue necklace", "dark hair ornament", "orange_ribbon", "blonde bow", "light hairclip", "pale_hair_ornament", "teal_hat", "pale_earrings", "orange glasses", "multicolored_mask", "grey belt", "white_scarf", "silver_belt", "red_mask", "teal_belt", "red ribbon", "blonde_hat", "brown_scarf", "multicolored bow", "green glasses", "yellow_ribbon", "black scarf", "silver_mask", "red necklace", "light_necklace", "gloves", "pink belt", "aqua_ribbon", "aqua_mask", "green_bow", "silver bow", "purple hat", "blonde hat", "blonde scarf", "black hat", "gold belt", "gold hat", "grey_glasses", "brown_belt", "multicolored_hat", "grey mask", "multicolored_ribbon", "black glasses", "yellow_hair_ornament", "red_necklace", "blue_mask", "aqua glasses", "gold_glasses", "aqua_bow", "multicolored belt", "pink_earrings", "brown bow", "multicolored hairclip", "red_bow", "white necklace", "orange mask", "aqua mask", "silver scarf", "teal_earrings", "pale_hat", "blonde hairclip", "blue ribbon", "yellow glasses", "pink_bow", "orange hat", "pink_mask", "multicolored ribbon", "silver mask", "teal hairclip", "dark ribbon", "blue_hairclip", "dark_earrings", "silver_glasses", "yellow belt", "purple hair ornament", "multicolored mask", "black hair ornament", "dark belt", "blonde_hair_ornament", "white glasses", "multicolored necklace", "black_bow", "aqua ribbon", "white belt", "multicolored glasses", "yellow bow", "silver_ribbon", "white_belt", "gold_ribbon", "gold_bow", "orange hair ornament", "yellow heart ornament", "yellow necklace", "pale hairclip", "aqua hat", "gold necklace", "green hairclip", "pale_glasses", "gold_mask", "dark_belt", "pale_necklace", "red_belt", "gold bow", "grey hair ornament", "aqua belt", "pink mask", "black necklace", "orange_belt", "pale belt", "yellow_necklace", "purple ribbon", "pink_hat", "gold hairclip", "brown_earrings", "blue_earrings", "silver necklace", "teal_ribbon", "purple necklace", "blonde_scarf", "purple_bow", "brown belt", "red scarf", "gold glasses", "aqua bow", "black bow", "light_scarf", "green earrings", "teal hat", "blue earrings", "pale_ribbon", "brown_glasses", "pink earrings", "red hair ornament", "brown earrings", "dark_bow", "light ribbon", "brown scarf", "teal scarf", "multicolored_hair_ornament", "brown_necklace", "pink_glasses", "black_necklace", "blonde earrings", "ofuda", "red_glasses", "blue belt", "grey hat", "purple_scarf", "light_hat", "blonde_earrings", "light belt", "blonde necklace", "teal_hair_ornament", "yellow_belt", "purple bow", "red hairclip", "aqua_hairclip", "orange_mask", "teal_glasses", "black_hair_ornament", "black belt", "dark_glasses", "red glasses", "brown ribbon", "grey_ribbon", "grey_hat", "black_mask", "black cords", "purple mask", "black hairclip", "pale hair ornament", "brown hairclip", "closed third eye", "green_glasses", "green_necklace", "gold_belt", "silver ribbon", "brown_bow", "chains", "light bow", "orange necklace", "aqua_scarf", "white_ribbon", "black_earrings", "multicolored_necklace", "blue_belt", "brown mask", "white_hair_ornament", "red_hairclip", "orange_necklace", "pink ribbon", "pink_scarf", "purple_earrings", "teal ribbon", "silver_earrings", "purple_hat", "green mask", "blonde_bow", "orange_bow", "brown glasses", "blue hat", "pink hat", "white scarf", "dark_hair_ornament", "aqua_glasses", "silver_hair_ornament", "red earrings", "grey glasses", "purple_ribbon", "white_bow", "pink_hairclip", "black earrings", "aqua_hair_ornament", "yellow_hairclip", "teal glasses", "light_hair_ornament", "green_hairclip", "pink_necklace", "white hairclip", "orange_scarf", "light_ribbon", "teal hair ornament", "blue_hat", "aqua scarf", "dark mask", "purple glasses", "purple belt", "white_hat", "red hat", "pale_belt", "blue scarf", "green hat", "light necklace", "blue hairclip", "ribbon bow", "yellow hairclip", "blonde_ribbon", "dark_scarf", "multicolored earrings", "pale glasses", "blue_hair_ornament", "gold mask", "pale ribbon", "multicolored_bow", "gold_earrings", "grey necklace", "pale necklace", "grey_hair_ornament", "green necklace", "blue_scarf", "dark_mask", "teal_hairclip", "pale_bow", "red_scarf"], "pose": ["gentle techwear pose", "intense butler pose", "bunny pose", "dreamy maid pose", "dreamy casual pose", "dynamic maid pose", "japanese pose", "bright beautiful pose", "cinematic idol pose", "gentle winter pose", "soft casual pose", "dynamic chinese pose", "dreamy fantasy pose", "night pose", "cinematic butler pose", "soft fantasy pose", "dramatic fantasy pose", "bright witch pose", "detailed sporty pose", "mating press", "gentle chinese pose", "dark idol pose", "dramatic autumn pose", "gentle witch pose", "cinematic autumn pose", "detailed gothic pose", "dark dragon pose", "cinematic maid pose", "soft dragon pose", "casual_pose", "gentle wolf pose", "dynamic nurse pose", "intense modern pose", "dynamic fox pose", "bright summer pose", "one leg raised", "dynamic wolf pose", "intense techwear pose", "cinematic summer pose", "cinematic demon pose", "intense angel pose", "dramatic cool pose", "walking", "cinematic dragon pose", "side entry sex", "chinese pose", "lactation", "stylish cat pose", "butler pose", "dynamic spring pose", "dark fantasy pose", "intense maid pose", "standing", "intense fox pose", "gentle casual pose", "dark traditional pose", "stylish autumn pose", "stylish spring pose", "intense chinese pose", "dark casual pose", "japanese_pose", "looking at viewer", "soft demon pose", "detailed idol pose", "cinematic techwear pose", "dynamic angel pose", "dark autumn pose", "intense fantasy pose", "detailed cute pose", "dynamic butler pose", "beautiful pose", "fantasy_pose", "detailed beautiful pose", "dynamic traditional pose", "fox pose", "gentle traditional pose", "stylish casual pose", "dramatic dragon pose", "dreamy beautiful pose", "gentle nurse pose", "dark cat pose", "detailed summer pose", "bright night pose", "gentle fox pose", "dreamy summer pose", "stylish nurse pose", "stylish butler pose", "breeding press", "idol_pose", "intense summer pose", "dreamy techwear pose", "sporty pose", "cinematic fox pose", "stylish fox pose", "stylish chinese pose", "intense japanese pose", "dramatic summer pose", "stylish demon pose", "dreamy nurse pose", "intense elegant pose", "handjob", "spring_pose", "gentle cute pose", "dreamy japanese pose", "cute_pose", "traditional pose", "stylish japanese pose", "dark beautiful pose", "detailed dragon pose", "stylish night pose", "winter_pose", "detailed cool pose", "gentle spring pose", "gentle autumn pose", "intense bunny pose", "walking upside down", "dark sporty pose", "dynamic beautiful pose", "bright autumn pose", "bright butler pose", "kneeling", "dark fox pose", "cool pose", "intense cute pose", "dreamy winter pose", "dramatic maid pose", "gentle summer pose", "bright wolf pose", "gentle japanese pose", "dramatic cat pose", "soft maid pose", "detailed chinese pose", "soft gothic pose", "stylish elegant pose", "dark angel pose", "bright maid pose", "elegant pose", "detailed casual pose", "dark cool pose", "cinematic casual pose", "bright gothic pose", "dreamy cute pose", "dramatic spring pose", "dramatic gothic pose", "vaginal sex", "dreamy fox pose", "intense sporty pose", "bright japanese pose", "chinese_pose", "stylish beautiful pose", "cinematic wolf pose", "breast milk", "bright winter pose", "gentle angel pose", "elegant_pose", "dynamic sporty pose", "dynamic demon pose", "cinematic chinese pose", "cinematic bunny pose", "dreamy chinese pose", "cinematic beautiful pose", "bright fantasy pose", "stylish fantasy pose", "soft traditional pose", "penis inside pussy", "detailed techwear pose", "creampie", "bright fox pose", "reading a book", "stylish traditional pose", "dreamy demon pose", "dramatic casual pose", "intense night pose", "intense dragon pose", "cum on breasts", "sporty_pose", "gothic_pose", "soft japanese pose", "bright techwear pose", "intense idol pose", "detailed witch pose", "dynamic gothic pose", "bright cute pose", "cinematic traditional pose", "cum on face", "spring pose", "gentle night pose", "bright idol pose", "bright modern pose", "soft night pose", "dramatic modern pose", "cat pose", "dreamy spring pose", "dark bunny pose", "dark demon pose", "soft beautiful pose", "summer pose", "cute pose", "gentle cool pose", "bunny_pose", "angel pose", "dreamy cat pose", "dynamic night pose", "dramatic japanese pose", "dreamy autumn pose", "modern_pose", "detailed modern pose", "dreamy idol pose", "gentle bunny pose", "intense gothic pose", "intense beautiful pose", "dreamy modern pose", "autumn pose", "stylish summer pose", "dynamic fantasy pose", "stylish winter pose", "detailed autumn pose", "dynamic cat pose", "cinematic elegant pose", "detailed elegant pose", "intense traditional pose", "nurse pose", "demon pose", "detailed demon pose", "idol pose", "detailed angel pose", "bright cool pose", "dark wolf pose", "cinematic fantasy pose", "dark summer pose", "dynamic modern pose", "dreamy wolf pose", "stylish techwear pose", "dramatic winter pose", "cinematic japanese pose", "detailed fantasy pose", "dramatic nurse pose", "soft winter pose", "dramatic butler pose", "stylish sporty pose", "holding book", "intense nurse pose", "bright chinese pose", "intense cat pose", "dark nurse pose", "soft nurse pose", "dramatic angel pose", "dramatic traditional pose", "gentle gothic pose", "dynamic pose", "soft butler pose", "witch pose", "gentle cat pose", "intense spring pose", "doggystyle", "autumn_pose", "dynamic summer pose", "intense casual pose", "cinematic nurse pose", "detailed winter pose", "dark gothic pose", "intense winter pose", "dreamy butler pose", "maid_pose", "dynamic casual pose", "detailed maid pose", "gentle dragon pose", "cinematic gothic pose", "soft angel pose", "bright dragon pose", "cinematic angel pose", "soft autumn pose", "dreamy elegant pose", "dynamic elegant pose", "dynamic japanese pose", "blowjob", "dynamic winter pose", "dragon_pose", "gentle modern pose", "dreamy night pose", "lying", "dramatic witch pose", "detailed traditional pose", "soft summer pose", "adjusting glasses", "witch_pose", "dramatic sporty pose", "gentle beautiful pose", "arms up", "dark elegant pose", "dreamy traditional pose", "bright nurse pose", "traditional_pose", "bright spring pose", "cinematic night pose", "breastjob", "stylish angel pose", "soft idol pose", "dreamy gothic pose", "dark butler pose", "bright cat pose", "gentle sporty pose", "cinematic winter pose", "looking back", "dark witch pose", "intense witch pose", "butler_pose", "bright casual pose", "cinematic modern pose", "stylish cool pose", "dramatic bunny pose", "dramatic techwear pose", "soft sporty pose", "stylish idol pose", "stylish wolf pose", "reaching toward viewer", "wolf_pose", "fox_pose", "soft fox pose", "gothic pose", "intense autumn pose", "cinematic witch pose", "dreamy bunny pose", "dynamic witch pose", "detailed cat pose", "night_pose", "dynamic idol pose", "dramatic night pose", "bright sporty pose", "soft elegant pose", "techwear pose", "dreamy sporty pose", "gentle maid pose", "gentle fantasy pose", "cinematic spring pose", "missionary position", "modern pose", "soft cat pose", "winter pose", "dramatic fox pose", "cinematic sporty pose", "dreamy angel pose", "dreamy witch pose", "dynamic cool pose", "bright bunny pose", "dynamic techwear pose", "dark winter pose", "dramatic wolf pose", "dramatic idol pose", "detailed wolf pose", "cinematic cool pose", "wolf pose", "soft spring pose", "stylish cute pose", "nurse_pose", "stylish maid pose", "dramatic demon pose", "dynamic cute pose", "dark techwear pose", "thighjob", "waving", "dreamy cool pose", "beautiful_pose", "dramatic chinese pose", "soft bunny pose", "fantasy pose", "soft wolf pose", "cool_pose", "detailed spring pose", "bright elegant pose", "dreamy dragon pose", "soft witch pose", "dark chinese pose", "gentle idol pose", "stylish modern pose", "soft cool pose", "bright traditional pose", "detailed nurse pose", "dynamic dragon pose", "demon_pose", "stylish dragon pose", "dramatic elegant pose", "soft cute pose", "dynamic autumn pose", "maid pose", "bright demon pose", "detailed japanese pose", "bright angel pose", "summer_pose", "intense cool pose", "stylish gothic pose", "cinematic cat pose", "dramatic cute pose", "techwear_pose", "soft modern pose", "stylish witch pose", "gentle butler pose", "stylish bunny pose", "dark modern pose", "holding teacup", "intense wolf pose", "detailed butler pose", "cinematic cute pose", "dark maid pose", "angel_pose", "cowgirl position", "casual pose", "dark cute pose", "dynamic bunny pose", "dark japanese pose", "dragon pose", "dramatic beautiful pose", "cat_pose", "detailed fox pose", "intense demon pose", "gentle elegant pose", "running", "soft techwear pose", "sitting", "soft chinese pose", "gentle demon pose", "detailed night pose", "detailed bunny pose"], "background": ["green sunset", "traditional scene", "dynamic witch scene", "traditional_room", "cat_scene", "intense sporty scene", "gentle sporty background", "blonde forest", "light forest", "fantasy background", "gentle winter background", "brown garden", "bright elegant room", "bright cool background", "night mood", "blue_morning", "witch_room", "dreamy cat background", "dramatic techwear room", "soft sporty background", "stylish elegant room", "grey_forest", "bright modern scene", "blonde beach", "nurse room", "green_night", "beautiful_room", "purple_forest", "dramatic chinese background", "silver room", "dynamic techwear scene", "brown_clouds", "gentle cool scene", "aqua_clouds", "cinematic traditional scene", "white morning", "gold night", "soft fantasy scene", "detailed night mood", "aqua_street", "pink_temple", "soft fantasy background", "dark casual room", "red morning", "blue_city", "dark casual background", "light river", "red sky", "intense fantasy background", "purple river", "dreamy bunny background", "dark gothic scene", "teal_garden", "silver_city", "brown lake", "red bedroom", "white_lake", "gentle beautiful scene", "stylish idol scene", "dark beautiful scene", "grey sunset", "dramatic night girl", "intense autumn background", "intense dragon background", "black_clouds", "black_river", "pink_rooftop", "bright casual background", "gentle summer scene", "teal room", "intense nurse room", "red_street", "multicolored_rooftop", "stylish fantasy room", "dramatic cool scene", "detailed fantasy room", "dynamic bunny background", "dreamy bunny scene", "cinematic night background", "cinematic bunny scene", "detailed casual background", "blonde_night", "dynamic angel background", "bright cute background", "purple sunset", "bright cat scene", "detailed cute background", "teal forest", "orange_mountain", "dramatic modern room", "autumn_scene", "pink morning", "dynamic maid room", "dark fantasy room", "light_shrine", "light_classroom", "blonde_classroom", "green_morning", "orange_bedroom", "orange_sky", "soft idol room", "dramatic cat scene", "teal morning", "pink room", "intense japanese room", "gold_beach", "dark_lake", "soft cute room", "intense idol background", "cinematic autumn background", "cinematic elegant room", "dreamy japanese scene", "orange sunset", "gold_clouds", "white classroom", "intense witch scene", "dynamic elegant room", "dark japanese scene", "purple_clouds", "dynamic techwear background", "multicolored_night", "dreamy summer scene", "green clouds", "dynamic japanese background", "pale_mountain", "cinematic winter scene", "angel_scene", "silver_garden", "bright fox background", "maid_background", "gentle cat background", "soft spring scene", "summer_room", "gentle beautiful room", "blue_street", "dark gothic room", "gentle summer background", "green temple", "intense cat room", "intense nurse background", "brown room", "yellow temple", "stylish nurse scene", "dreamy techwear scene", "stylish angel scene", "stylish bunny scene", "dark cool scene", "dreamy beautiful scene", "grey night", "cinematic cat background", "soft summer scene", "grey river", "dark japanese room", "stylish idol room", "purple clouds", "dynamic modern background", "blonde_clouds", "purple mountain", "chinese_scene", "winter background", "blonde_sunset", "silver_street", "bright chinese room", "dreamy witch background", "bunny_background", "intense techwear room", "gold morning", "intense techwear scene", "red river", "winter room", "grey forest", "white_sunset", "dark idol background", "grey_rooftop", "dynamic fox scene", "soft traditional scene", "intense summer room", "bright winter scene", "dark_river", "grey_garden", "pink clouds", "stylish maid room", "black_rooftop", "gold sky", "bright cool scene", "dynamic elegant scene", "pale_city", "soft maid background", "orange forest", "detailed elegant background", "aqua sunset", "orange beach", "dramatic cute room", "pale_street", "white_morning", "gold_sky", "blue classroom", "bright winter background", "cinematic winter background", "dramatic modern scene", "stylish japanese scene", "grey_street", "intense winter room", "cat background", "bright night mood", "intense japanese background", "detailed casual scene", "dreamy sporty scene", "gentle traditional scene", "blonde_morning", "orange city", "silver shrine", "dynamic japanese room", "detailed demon scene", "detailed bunny scene", "dynamic gothic scene", "orange_night", "blue night", "yellow beach", "dark butler scene", "detailed sporty scene", "intense japanese scene", "brown_city", "teal_classroom", "cinematic gothic room", "dark techwear background", "soft spring room", "green forest", "intense gothic scene", "stylish demon scene", "dynamic traditional room", "blue_temple", "bright night illustration", "intense demon room", "intense idol scene", "intense casual background", "grey_beach", "red classroom", "stylish night scene", "stylish angel room", "dramatic cat background", "detailed beautiful scene", "spring background", "dramatic fox background", "brown_room", "dynamic sporty background", "dramatic idol scene", "teal_night", "orange_morning", "intense cool scene", "dreamy demon background", "bright traditional background", "detailed beautiful background", "elegant_room", "dramatic dragon scene", "dramatic bunny room", "pink_night", "pale_room", "silver sunset", "yellow_river", "summer scene", "cinematic butler scene", "aqua_beach", "dark cat scene", "dramatic winter room", "intense wolf background", "stylish cute scene", "stylish night room", "pale_beach", "dynamic dragon room", "bright maid scene", "soft fox background", "butler background", "soft summer background", "chinese scene", "gentle fantasy scene", "dynamic witch room", "cinematic night room", "orange_sunset", "dark sky", "light_sunset", "idol background", "cat scene", "detailed dragon background", "white_city", "bright japanese room", "gentle gothic room", "dreamy nurse room", "pale clouds", "intense sporty room", "dark autumn room", "green mountain", "red_classroom", "intense cat scene", "yellow clouds", "dark techwear scene", "aqua beach", "butler room", "dark night", "techwear room", "white forest", "cool background", "yellow shrine", "gold_bedroom", "dark cute background", "summer_background", "pink_sunset", "gentle nurse scene", "dreamy modern background", "fantasy room", "dreamy chinese room", "detailed modern scene", "red clouds", "cinematic dragon scene", "angel background", "pink_room", "pale_river", "orange temple", "multicolored river", "cinematic angel background", "blue lake", "teal street", "red_garden", "dark morning", "dreamy elegant background", "intense traditional scene", "detailed techwear room", "dreamy idol background", "witch scene", "detailed autumn scene", "angel_room", "night background", "intense night girl", "dreamy maid scene", "soft wolf scene", "gentle japanese room", "dramatic bunny scene", "dark idol scene", "dynamic maid scene", "silver garden", "stylish beautiful background", "blonde morning", "butler_background", "gentle butler background", "gentle demon scene", "dramatic night background", "dark sporty room", "intense casual scene", "dramatic cute background", "pink lake", "bright butler room", "dreamy summer background", "blonde shrine", "fox background", "intense gothic background", "dark traditional scene", "intense sporty background", "dynamic night room", "pink river", "orange_garden", "shrine room", "dark witch background", "bright beautiful background", "teal_clouds", "dynamic elegant background", "maid scene", "demon_room", "cinematic beautiful room", "pink_clouds", "green room", "dramatic summer room", "cinematic spring scene", "soft elegant background", "dark cat room", "stylish beautiful room", "dynamic night illustration", "gentle fantasy room", "dramatic spring scene", "multicolored temple", "fantasy_room", "bright cat room", "techwear_background", "dreamy butler background", "dark witch scene", "pink temple", "gentle spring room", "orange_temple", "suzuran_(arknights)", "gold shrine", "dynamic gothic room", "yellow mountain", "dreamy angel scene", "dramatic bunny background", "pale classroom", "dramatic wolf scene", "soft autumn scene", "dramatic beautiful room", "stylish techwear scene", "dramatic butler background", "gold mountain", "stylish demon background", "dynamic wolf scene", "black_sky", "dreamy night background", "orange river", "aqua mountain", "dark bedroom", "stylish modern background", "gentle witch scene", "gentle elegant room", "detailed nurse scene", "night room", "soft dragon background", "red_sky", "intense spring background", "gentle modern background", "multicolored_shrine", "dramatic fantasy background", "soft idol background", "bright fantasy room", "silver_classroom", "yellow street", "yellow lake", "gentle sporty room", "yellow_garden", "white_forest", "cinematic nurse scene", "blonde street", "red_forest", "blue street", "red street", "dark techwear room", "dark demon scene", "multicolored city", "dramatic spring room", "light_night", "light mountain", "gothic scene", "blonde night", "detailed fox background", "intense chinese background", "silver mountain", "sporty room", "purple city", "dynamic sporty scene", "dramatic nurse room", "dark_beach", "grey_room", "red temple", "summer background", "dreamy modern room", "soft casual background", "pale lake", "bright modern background", "detailed summer room", "stylish fox scene", "gentle spring background", "demon_scene", "dreamy cat room", "cinematic elegant scene", "intense summer background", "teal bedroom", "detailed demon background", "white river", "intense winter scene", "cinematic nurse room", "dreamy cat scene", "gentle chinese scene", "white_room", "dramatic maid room", "cinematic witch background", "aqua_temple", "dynamic angel scene", "black river", "cinematic wolf background", "blue_sky", "cinematic dragon room", "cinematic idol background", "grey_city", "silver city", "dynamic spring room", "orange_shrine", "bright chinese scene", "multicolored_sky", "gold rooftop", "orange street", "red_morning", "silver temple", "fox scene", "gentle casual background", "intense butler room", "pink_mountain", "cinematic spring room", "blue temple", "cool_scene", "detailed cat background", "dark fox room", "dreamy chinese scene", "casual room", "dreamy angel room", "blonde_beach", "brown_forest", "demon background", "stylish dragon background", "teal_bedroom", "stylish cat scene", "maid_scene", "orange classroom", "dramatic japanese background", "orange_beach", "grey sky", "dreamy wolf scene", "dramatic butler scene", "gentle fantasy background", "dynamic techwear room", "dynamic butler scene", "green_classroom", "aqua lake", "pink beach", "blonde bedroom", "white bedroom", "dynamic fox room", "cinematic summer room", "gentle fox room", "dramatic idol room", "sporty background", "bright casual scene", "dark nurse background", "dynamic cat room", "black_beach", "pink_bedroom", "dark maid background", "dreamy night girl", "detailed cat scene", "dynamic winter background", "dark butler room", "brown beach", "orange bedroom", "red lake", "light_forest", "dark lake", "stylish sporty scene", "detailed demon room", "white_shrine", "dark temple", "bright beautiful scene", "multicolored_lake", "bright wolf room", "cinematic autumn room", "bright witch scene", "autumn background", "dark angel scene", "soft butler scene", "brown_sky", "blonde river", "cat room", "dark sporty background", "fantasy_scene", "cinematic modern scene", "cool room", "teal_room", "cinematic autumn scene", "gentle fox scene", "aqua room", "bright witch background", "dark_sky", "dreamy cute background", "bright cat background", "gothic background", "stylish cat room", "silver_rooftop", "black_shrine", "dramatic techwear scene", "purple_temple", "aqua clouds", "green_lake", "gentle summer room", "detailed dragon room", "yellow city", "bright fox scene", "black city", "bright autumn scene", "cinematic maid room", "fox room", "dreamy maid background", "gentle angel scene", "fantasy scene", "dreamy night room", "silver_night", "white street", "stylish elegant background", "multicolored rooftop", "intense summer scene", "dramatic winter scene", "butler scene", "bright sporty room", "gentle elegant background", "japanese scene", "cinematic cat room", "elegant room", "bright beautiful room", "dark fantasy background", "dreamy traditional scene", "detailed techwear background", "black_lake", "light_city", "modern_background", "white_beach", "blonde_room", "purple temple", "cinematic techwear scene", "intense elegant room", "soft demon room", "butler_scene", "dark beautiful room", "gentle cute scene", "dragon scene", "pink_beach", "soft techwear scene", "intense angel scene", "aqua_classroom", "dragon_room", "white beach", "nurse_background", "dark forest", "stylish bunny room", "spring room", "gentle fox background", "dark wolf room", "black_night", "brown street", "yellow_forest", "brown classroom", "bright sporty background", "bright nurse scene", "aqua garden", "intense spring scene", "soft night illustration", "grey_temple", "intense casual room", "dynamic sporty room", "cinematic cool scene", "stylish maid background", "pale_shrine", "bright nurse background", "gentle gothic scene", "intense maid scene", "blue rooftop", "dramatic demon background", "dramatic nurse scene", "brown forest", "dynamic cool room", "pink sky", "autumn_room", "dreamy demon room", "green_river", "light clouds", "gentle night girl", "demon scene", "grey street", "cinematic wolf room", "detailed chinese background", "dramatic angel scene", "dynamic nurse scene", "white_garden", "yellow_room", "cinematic bunny background", "cinematic cool background", "intense winter background", "blonde_forest", "yellow morning", "pale rooftop", "red city", "casual_background", "pink_classroom", "red garden", "dramatic night illustration", "dark maid room", "dark cool room", "black_mountain", "black_street", "soft cat room", "soft modern room", "multicolored shrine", "stylish cat background", "library", "aqua night", "soft techwear room", "aqua_room", "cinematic sporty background", "blue beach", "white garden", "intense butler scene", "spring scene", "yellow forest", "pale_classroom", "dragon room", "gentle winter room", "dark bunny scene", "dreamy fantasy scene"], "effect": ["dynamic cool portrait", "intense chinese portrait", "cinematic witch angle", "fantasy lighting", "winter_lighting", "dark winter portrait", "dark idol close-up", "dreamy maid lighting", "gothic_lighting", "summer close-up", "detailed angel close-up", "dynamic techwear angle", "soft traditional lighting", "detailed summer composition", "angel close-up", "dynamic fantasy portrait", "winter lighting", "stylish bunny lighting", "cute portrait", "soft butler lighting", "bright spring close-up", "demon angle", "gentle cool composition", "gentle casual angle", "detailed casual lighting", "traditional_composition", "stylish techwear composition", "techwear_portrait", "dynamic dragon lighting", "intense chinese angle", "dark bunny portrait", "stylish autumn portrait", "stylish night close-up", "intense gothic portrait", "bright summer portrait", "soft modern composition", "dark cool composition", "angel_composition", "bright traditional lighting", "gentle cool close-up", "stylish japanese lighting", "soft sporty portrait", "bright techwear portrait", "nurse_portrait", "bright angel angle", "dynamic fox composition", "sporty_lighting", "bright cat portrait", "bright night close-up", "dramatic fox close-up", "bright modern portrait", "techwear_composition", "dramatic fantasy composition", "cute composition", "dreamy nurse composition", "angel portrait", "dynamic wolf lighting", "gentle wolf portrait", "angel_lighting", "cinematic night portrait", "dynamic gothic lighting", "dynamic japanese angle", "dynamic demon composition", "dreamy maid composition", "night_lighting", "japanese_close-up", "bright night angle", "dreamy autumn portrait", "cinematic casual close-up", "cinematic sporty angle", "intense modern angle", "dynamic cute angle", "bright winter angle", "detailed cool lighting", "dynamic beautiful angle", "detailed nurse close-up", "intense spring angle", "detailed dragon composition", "gentle dragon portrait", "dreamy bunny lighting", "detailed butler close-up", "dark dragon composition", "soft dragon close-up", "bright fox portrait", "cinematic nurse portrait", "intense wolf angle", "dramatic cute lighting", "dreamy spring angle", "dynamic wolf portrait", "dreamy gothic angle", "dramatic autumn portrait", "elegant_composition", "cinematic angel angle", "dynamic japanese portrait", "dramatic cute composition", "cinematic bunny composition", "stylish traditional angle", "intense cool close-up", "dynamic nurse close-up", "detailed bunny composition", "gentle chinese lighting", "idol angle", "bright dragon lighting", "detailed witch composition", "soft winter angle", "japanese portrait", "dreamy butler lighting", "dynamic casual lighting", "stylish butler composition", "winter close-up", "soft autumn portrait", "dramatic gothic close-up", "cinematic cool angle", "stylish cat composition", "spring composition", "cinematic cat close-up", "gentle chinese composition", "detailed traditional angle", "dreamy fox lighting", "dynamic cute lighting", "winter_composition", "gentle dragon composition", "gentle gothic composition", "gentle maid close-up", "cinematic angel portrait", "dreamy chinese composition", "intense elegant lighting", "demon_portrait", "dreamy angel lighting", "detailed chinese composition", "chinese angle", "cinematic fox close-up", "dark chinese composition", "dramatic elegant composition", "dynamic maid portrait", "bright traditional portrait", "gentle witch close-up", "intense nurse angle", "soft chinese angle", "cinematic chinese close-up", "dynamic summer angle", "dreamy japanese angle", "detailed autumn angle", "dark witch close-up", "gentle demon lighting", "dramatic lighting", "gentle witch portrait", "dark cute portrait", "cinematic butler close-up", "stylish nurse lighting", "maid_composition", "cinematic summer portrait", "bright fox lighting", "dreamy elegant angle", "intense witch lighting", "stylish summer angle", "cinematic elegant close-up", "dreamy techwear close-up", "bright idol composition", "soft elegant lighting", "dynamic japanese lighting", "spring lighting", "detailed gothic lighting", "detailed cute close-up", "stylish casual close-up", "gentle night close-up", "bright casual close-up", "dramatic gothic composition", "cinematic fox lighting", "bright nurse close-up", "bright gothic angle", "detailed winter composition", "bright maid composition", "cinematic japanese angle", "gentle gothic portrait", "detailed cool close-up", "dynamic fox lighting", "soft gothic composition", "soft winter portrait", "detailed winter lighting", "detailed cute angle", "japanese_lighting", "idol_lighting", "dark sporty portrait", "dreamy wolf close-up", "night composition", "cinematic japanese close-up", "dark japanese composition", "intense cat angle", "dreamy traditional close-up", "dramatic witch angle", "bright casual portrait", "butler composition", "dark autumn close-up", "summer composition", "dreamy summer angle", "detailed witch angle", "fox_composition", "autumn_close-up", "techwear_angle", "intense modern close-up", "gentle gothic close-up", "gentle angel close-up", "cinematic fantasy close-up", "dynamic butler composition", "detailed techwear portrait", "cinematic butler composition", "gentle fox angle", "soft beautiful composition", "intense cute portrait", "chinese portrait", "dreamy cat portrait", "motion blur", "stylish elegant angle", "stylish gothic composition", "butler_lighting", "dark butler angle", "dreamy cute composition", "detailed fantasy portrait", "elegant portrait", "dynamic night lighting", "dramatic dragon angle", "soft spring composition", "dreamy angel angle", "dragon lighting", "cinematic nurse close-up", "dramatic sporty lighting", "dark gothic lighting", "stylish idol lighting", "dramatic bunny composition", "cinematic fox portrait", "gothic_angle", "dynamic bunny close-up", "dramatic maid close-up", "soft cute close-up", "cinematic spring lighting", "dramatic angel lighting", "dreamy winter angle", "traditional close-up", "dramatic cat lighting", "gentle cute close-up", "cinematic summer composition", "winter angle", "dreamy elegant close-up", "dark chinese lighting", "dramatic bunny lighting", "bright sporty portrait", "gentle autumn lighting", "dramatic fantasy angle", "dynamic cool angle", "stylish bunny close-up", "dynamic modern portrait", "detailed techwear lighting", "demon_lighting", "dark fox composition", "demon_close-up", "stylish beautiful angle", "beautiful close-up", "elegant_portrait", "bright spring angle", "intense traditional composition", "beautiful_composition", "soft dragon lighting", "stylish winter lighting", "intense spring portrait", "cinematic casual lighting", "detailed demon lighting", "dramatic summer angle", "cinematic cool close-up", "dreamy autumn lighting", "dynamic summer close-up", "dreamy summer composition", "dark cat close-up", "cinematic summer close-up", "intense angel angle", "stylish cat portrait", "soft spring portrait", "dark fantasy close-up", "gentle winter angle", "bunny close-up", "dreamy witch composition", "cinematic beautiful lighting", "gentle summer angle", "gentle wolf lighting", "stylish traditional close-up", "dutch angle", "soft cute composition", "dynamic idol angle", "stylish butler angle", "bright night lighting", "gentle idol portrait", "stylish demon close-up", "dreamy traditional angle", "stylish spring angle", "cinematic maid lighting", "dreamy summer lighting", "warm bedroom light", "dark modern angle", "gentle nurse lighting", "gentle modern angle"]};
-
-  function v152SplitTags(text){
-    return (text || "").split(",").map(s => s.trim()).filter(Boolean);
-  }
-
-  function v152JoinTags(tags){
-    const out = [];
-    const seen = new Set();
-    for (const tag of tags) {
-      const t = (tag || "").trim();
-      if (!t) continue;
-      const k = t.toLowerCase();
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push(t);
-    }
-    return out.join(", ");
-  }
-
-  function v152Pick(arr, n, existing){
-    if (!Array.isArray(arr) || !arr.length || n <= 0) return [];
-    const source = arr.filter(x => !existing.has(String(x).toLowerCase()));
-    const picked = [];
-    const used = new Set();
-    while (picked.length < n && source.length > 0) {
-      const idx = Math.floor(Math.random() * source.length);
-      const value = source[idx];
-      source.splice(idx, 1);
-      const k = String(value).toLowerCase();
-      if (used.has(k)) continue;
-      used.add(k);
-      picked.push(value);
-    }
-    return picked;
-  }
-
-  function v152IsCoreTag(tag){
-    const t = (tag || "").toLowerCase();
-    return [
-      "1girl","solo","1boy","2boys","3boys","multiple boys","pov",
-      "sfw","nsfw","uncensored","censored","no text"
-    ].includes(t);
-  }
-
-  function v152Matches(tag, arr){
-    return arr.some(rx => rx.test(tag));
-  }
-
-  const V152_LOW = [
-    /^very aesthetic$/i, /^newest$/i, /^highly detailed$/i, /^detailed wallpaper$/i,
-    /^ultra-?detailed$/i, /^cg illustration$/i, /^dramatic lighting$/i,
-    /^atmospheric lighting$/i, /^cinematic lighting$/i, /^cinematic shadows$/i,
-    /^high contrast shadows$/i, /^soft shadows$/i, /^glowing particles$/i,
-    /^floating petals$/i, /^motion blur$/i, /^wind$/i, /^hair flowing$/i,
-    /^moonlight$/i, /^soft sunlight$/i, /^dreamy .*$/i, /^soft .* background$/i,
-    /^cinematic .* background$/i, /^bright .* background$/i, /^gentle .* background$/i
-  ];
-
-  const V152_MED = [
-    /^close-?up$/i, /^upper body$/i, /^cowboy shot$/i, /^full body$/i,
-    /^front view$/i, /^side view$/i, /^from above$/i, /^low angle$/i, /^high angle$/i,
-    /^over-?the-?shoulder view$/i, /^dutch angle$/i, /^diagonal camera$/i, /^off-?center camera$/i,
-    /^dynamic composition$/i, /^diagonal composition$/i, /^strong perspective$/i,
-    /^extreme perspective$/i, /^strong foreshortening$/i, /^dramatic crop$/i, /^cinematic crop$/i,
-    /^natural expression$/i, /^soft smile$/i, /^playful smile$/i, /^confident smile$/i,
-    /^mischievous smile$/i, /^sleepy expression$/i, /^sleepy smile$/i,
-    /^detailed .* eyes$/i, /^beautiful .* eyes$/i, /^gentle .* expression$/i,
-    /^bright .* expression$/i, /^intense .* expression$/i
-  ];
-
-  const V152_GENERIC_REPLACE = [
-    /^very aesthetic$/i, /^newest$/i, /^highly detailed$/i, /^cg illustration$/i,
-    /^natural expression$/i, /^soft smile$/i, /^playful smile$/i, /^confident smile$/i,
-    /^mischievous smile$/i, /^sleepy expression$/i, /^dreamy .*$/i,
-    /^bright .* expression$/i, /^gentle .* expression$/i, /^intense .* expression$/i,
-    /^dynamic .* outfit$/i, /^cinematic .* outfit$/i, /^soft .* background$/i,
-    /^cinematic .* background$/i, /^gentle .* background$/i, /^bright .* background$/i
-  ];
-
-  function v152Diversify(text){
-    let tags = v152SplitTags(text);
-    if (!tags.length) return text;
-
-    const existing = new Set(tags.map(t => t.toLowerCase()));
-    const extra = [];
-
-    // 从 6k 级大池里直接抽，优先补角色/服装/场景/动作差异
-    extra.push(...v152Pick(V152_BIG_POOL.body, 1, existing));
-    extra.push(...v152Pick(V152_BIG_POOL.hair, 1, existing));
-    extra.push(...v152Pick(V152_BIG_POOL.face, 1, existing));
-    extra.push(...v152Pick(V152_BIG_POOL.clothing, 2, existing));
-    extra.push(...v152Pick(V152_BIG_POOL.accessory, 1, existing));
-    extra.push(...v152Pick(V152_BIG_POOL.pose, 1, existing));
-    extra.push(...v152Pick(V152_BIG_POOL.background, 1, existing));
-    extra.push(...v152Pick(V152_BIG_POOL.effect, 1, existing));
-
-    // 先删一部分泛词，再塞入真正大池词
-    let removable = 0;
-    tags = tags.filter(tag => {
-      if (removable >= extra.length) return true;
-      if (v152IsCoreTag(tag)) return true;
-      if (v152Matches(tag, V152_GENERIC_REPLACE)) {
-        removable += 1;
-        return false;
-      }
-      return true;
-    });
-
-    for (const t of extra) {
-      if (!existing.has(String(t).toLowerCase())) tags.push(t);
-    }
-
-    return v152JoinTags(tags);
-  }
-
-  function v152Compact(text){
-    let tags = v152SplitTags(text);
-
-    // 去重
-    const seen = new Set();
-    tags = tags.filter(tag => {
-      const k = tag.toLowerCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-
-    if (tags.length <= 20) return tags.join(", ");
-
-    let target = tags.length;
-    if (tags.length >= 48) target = tags.length - 28;
-    else if (tags.length >= 42) target = tags.length - 24;
-    else if (tags.length >= 36) target = tags.length - 20;
-    else if (tags.length >= 30) target = tags.length - 16;
-    else if (tags.length >= 24) target = tags.length - 12;
-
-    target = Math.max(target, 18);
-
-    function trimByMatch(list, patterns, limit){
-      let out = [];
-      let kept = 0;
-      for (const tag of list) {
-        if (v152Matches(tag, patterns)) {
-          if (kept < limit) {
-            out.push(tag);
-            kept += 1;
-          }
-        } else {
-          out.push(tag);
-        }
-      }
-      return out;
-    }
-
-    const QUALITY = [/^masterpiece$/i,/^best quality$/i,/^very aesthetic$/i,/^newest$/i,/^highly detailed$/i,/^cg illustration$/i,/^ultra-?detailed$/i];
-    const CAMERA = [/^close-?up$/i,/^upper body$/i,/^cowboy shot$/i,/^full body$/i,/^front view$/i,/^side view$/i,/^from above$/i,/^low angle$/i,/^high angle$/i,/^over-?the-?shoulder view$/i,/^dutch angle$/i,/^diagonal camera$/i,/^off-?center camera$/i];
-    const COMP = [/^dynamic composition$/i,/^diagonal composition$/i,/^strong perspective$/i,/^extreme perspective$/i,/^strong foreshortening$/i,/^dramatic crop$/i,/^cinematic crop$/i];
-    const EFFECT = [/^dramatic lighting$/i,/^atmospheric lighting$/i,/^cinematic lighting$/i,/^cinematic shadows$/i,/^high contrast shadows$/i,/^soft shadows$/i,/^moonlight$/i,/^soft sunlight$/i,/^glowing particles$/i,/^floating petals$/i,/^motion blur$/i,/^wind$/i,/^hair flowing$/i];
-
-    tags = trimByMatch(tags, QUALITY, 2);
-    tags = trimByMatch(tags, CAMERA, 2);
-    tags = trimByMatch(tags, COMP, 1);
-    tags = trimByMatch(tags, EFFECT, 1);
-
-    if (tags.length > target) {
-      for (let i = tags.length - 1; i >= 0 && tags.length > target; i--) {
-        const tag = tags[i];
-        if (v152IsCoreTag(tag)) continue;
-        if (v152Matches(tag, V152_LOW)) tags.splice(i, 1);
-      }
-    }
-    if (tags.length > target) {
-      for (let i = tags.length - 1; i >= 0 && tags.length > target; i--) {
-        const tag = tags[i];
-        if (v152IsCoreTag(tag)) continue;
-        if (v152Matches(tag, V152_MED)) tags.splice(i, 1);
-      }
-    }
-    if (tags.length > target) {
-      const veryGeneric = [/^beautiful .*$/i,/^detailed .*$/i,/^intense .*$/i,/^stylish .*$/i,/^cinematic .*$/i,/^soft .*$/i,/^dramatic .*$/i,/^dreamy .*$/i,/^gentle .*$/i,/^bright .*$/i];
-      for (let i = tags.length - 1; i >= 0 && tags.length > target; i--) {
-        const tag = tags[i];
-        if (v152IsCoreTag(tag)) continue;
-        if (v152Matches(tag, veryGeneric)) tags.splice(i, 1);
-      }
-    }
-    if (tags.length > target) {
-      for (let i = tags.length - 1; i >= 0 && tags.length > target; i--) {
-        const tag = tags[i];
-        if (v152IsCoreTag(tag)) continue;
-        tags.splice(i, 1);
-      }
-    }
-
-    return tags.join(", ");
-  }
-
-  function v152ProcessTextarea(ta){
-    if (!ta || ta.dataset.v152done === "1") return;
-    const card = ta.closest("div");
-    if (!card) return;
-    const hasCopyBtn = Array.from(card.querySelectorAll("button")).some(btn => /复制这一条|copy/i.test((btn.textContent || "").trim()));
-    if (!hasCopyBtn) return;
-
-    const oldText = (("value" in ta ? ta.value : ta.textContent) || "").trim();
-    if (!oldText) return;
-
-    let text = oldText;
-    text = v152Diversify(text);
-    text = v152Compact(text);
-
-    if ("value" in ta) ta.value = text;
-    else ta.textContent = text;
-
-    ta.dataset.v152done = "1";
-  }
-
-  function v152ProcessAll(root){
-    (root || document).querySelectorAll("textarea").forEach(v152ProcessTextarea);
-  }
-
-  function v152Install(){
-    v152ProcessAll(document);
-
-    const obs = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        for (const node of m.addedNodes) {
-          if (node && node.nodeType === 1) {
-            v152ProcessAll(node);
-          }
-        }
-      }
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
-
-    // 第二页每次重新生成后，旧 observer 可能先跑，这里再补一轮
-    setInterval(() => v152ProcessAll(document), 1200);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", v152Install);
-  } else {
-    v152Install();
-  }
-})();
-
-
-
-
-/* ===== v1.5.3 second-page full big-pool rewrite =====
-   重写第二页批量生成：不再依赖原先十几个 pose/action。
-   运行时直接从本地 activeTags 里构建 5000+ 固定候选池，并生成大动作池。
-*/
-(function(){
-  const V153_CORE_KEEP = new Set([
-    "1girl","solo","single focus","1boy","2boys","multiple boys","duo","threesome","group sex",
-    "pov","male pov","sfw","explicit","uncensored","no text",
-  ]);
-
-  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
-  function shuffle(arr){
-    const a=[...arr];
-    for(let i=a.length-1;i>0;i--){
-      const j=Math.floor(Math.random()*(i+1));
-      [a[i],a[j]]=[a[j],a[i]];
-    }
-    return a;
-  }
-  function unique(arr){
-    const out=[], seen=new Set();
-    for(const x of arr){
-      const s=String(x||"").trim();
-      if(!s) continue;
-      const k=s.toLowerCase();
-      if(seen.has(k)) continue;
-      seen.add(k); out.push(s);
-    }
-    return out;
-  }
-  function compact(parts){ return unique(parts).join(", ").replace(/,\s*,/g,", ").replace(/\s+/g," ").trim(); }
-  function tagText(t){ return typeof t === "string" ? t : (t && (t.tag || t.name || t.en || t.text)) || ""; }
-  function catText(t){ return (t && (t.cat || t.category || t.group || t.type || t.subCategory || t.subcat)) || ""; }
-  function modeOk(t, mode){
-    if(!t || typeof t === "string") return true;
-    if(mode === "sfw" && t.mode === "nsfw") return false;
-    if(mode === "nsfw" && t.mode === "sfw") return false;
-    return true;
-  }
-  function norm(s){ return String(s||"").trim().toLowerCase(); }
-  function safeBigTag(s){
-    const t=norm(s);
-    if(!t || t.length>64) return false;
-    if(V153_CORE_KEEP.has(t)) return false;
-    if(/watermark|signature|username|artist name|text focus|comic|speech bubble|english text/.test(t)) return false;
-    if(/^bad |^worst |^lowres|censored|mosaic|bar censor|extra limb|bad anatomy|bad hands/.test(t)) return false;
-    return true;
-  }
-
-  let V153_CACHE=null;
-  function buildV153Pools(){
-    if(V153_CACHE) return V153_CACHE;
-    const raw = (typeof activeTags !== "undefined" && Array.isArray(activeTags)) ? activeTags : [];
-    const byCat = {};
-    for(const t of raw){
-      const tag=tagText(t);
-      if(!safeBigTag(tag)) continue;
-      const cat=catText(t)||"misc";
-      if(!byCat[cat]) byCat[cat]=[];
-      byCat[cat].push(tag);
-    }
-    for(const k of Object.keys(byCat)) byCat[k]=unique(byCat[k]);
-
-    const fixedBase = unique([
-      ...(byCat.species||[]), ...(byCat.body||[]), ...(byCat.hair||[]), ...(byCat.eyes||[]), ...(byCat.face||[]),
-      ...(byCat.expression||[]), ...(byCat.clothing||[]), ...(byCat.accessory||[]), ...(byCat.pose||[]),
-      ...(byCat.background||[]), ...(byCat.camera||[]), ...(byCat.composition||[]), ...(byCat.lighting||[]),
-      ...(byCat.effects||[]), ...(byCat.danbooru_general||[])
-    ]).slice(0, 6000);
-
-    const sfwActionSeeds = [
-      "walking forward", "running toward viewer", "jumping lightly", "twirling around", "turning around suddenly",
-      "looking back over shoulder", "reaching toward viewer", "leaning forward", "stepping toward camera", "kneeling down",
-      "sitting on the edge", "lying on bed", "standing in strong wind", "opening door", "opening curtains",
-      "holding phone", "holding flower", "holding book", "holding umbrella", "adjusting clothes", "fixing hair",
-      "taking off jacket", "putting on glasses", "stretching after waking up", "crouching close to camera",
-      "resting chin on hand", "covering mouth while laughing", "walking barefoot", "dancing in place", "spinning with skirt floating",
-      "catching falling petals", "standing on tiptoe", "climbing stairs and looking back", "leaning on desk", "sitting on railing",
-      "running through rain", "stepping over puddle", "walking through doorway", "peeking from behind door", "reaching upward",
-      "falling through the air", "floating in zero gravity", "splashing water", "holding drink toward viewer", "reading under blanket",
-      "brushing hair", "resting against window", "hiding behind curtain", "walking through crowd", "posing for a photo",
-      "turning with hair swinging", "grabbing hat in wind", "pulling sleeve", "lifting skirt slightly", "checking reflection",
-      "sitting cross-legged", "kneeling on bed", "lying on stomach", "looking over glasses", "tilting head",
-      "raising one knee", "standing with one leg forward", "walking down stairs", "running up stairs", "sliding across floor",
-      "holding hands behind back", "arms above head", "hands on hips", "one hand on chest", "one hand reaching out"
-    ];
-
-    const contexts = unique([
-      ...(byCat.pose||[]), ...(byCat.background||[]), ...(byCat.clothing||[]), ...(byCat.accessory||[]),
-      ...(byCat.expression||[]), ...(byCat.camera||[]), ...(byCat.composition||[]), ...(byCat.effects||[]),
-      ...(byCat.danbooru_general||[])
-    ]).filter(safeBigTag).slice(0, 1500);
-
-    const actionBig=[];
-    for(const v of sfwActionSeeds){
-      for(const c of contexts){
-        actionBig.push(`${v}, ${c}`);
-        if(actionBig.length>=5600) break;
-      }
-      if(actionBig.length>=5600) break;
-    }
-
-    const nsfwCore = [
-      ["missionary position, female lying on back, male on top, vaginal sex, penis inside pussy", "正常位"],
-      ["missionary position, legs on shoulders, female lying on back, male on top, vaginal sex", "腿架肩正常位"],
-      ["breeding press, mating press, female lying on back, knees pressed to chest, male on top, not cowgirl", "种付位"],
-      ["doggystyle, on all fours, male behind, vaginal sex from behind", "后入位"],
-      ["side entry sex, side lying position, one leg raised, vaginal sex from side", "侧入位"],
-      ["cowgirl position, woman on top, straddling partner, vaginal sex", "骑乘位"],
-      ["reverse cowgirl, woman on top facing away, vaginal sex", "反骑乘"],
-      ["lifted sex, legs wrapped around waist, partner holding thighs, vaginal sex", "抱起插入"],
-      ["wall sex, back against wall, one leg raised, vaginal sex", "墙边插入"],
-      ["bed edge sex, hips lifted, partner standing at bed edge, vaginal sex", "床边插入"],
-      ["bent over desk, hands on table, doggystyle from behind", "桌边后入"],
-      ["mirror sex, hands on sink, male behind, mirror reflection visible", "镜前后入"],
-      ["standing sex, one leg lifted, body pressed close, vaginal sex", "站立插入"],
-      ["sitting on partner's lap, close embrace, vaginal sex", "膝上插入"],
-      ["pinned down on floor, wrists held down, male above, vaginal sex", "地板压制"],
-      ["shower sex, wet body, steam, hands on wall, vaginal sex", "淋浴间做爱"],
-      ["blowjob, oral sex, penis in mouth, kneeling close to partner", "口交"],
-      ["deepthroat, oral sex, head tilted back, wet eyes", "深喉"],
-      ["handjob, female hand on penis, close-up service", "手交"],
-      ["thighjob, penis between thighs, thighs pressed together", "素股"],
-      ["breastjob, penis between breasts, hands pressing breasts together", "乳交"],
-      ["footjob, bare feet foreground, soles framing shaft", "足交"],
-      ["lactation, breast milk, handjob, milk dripping onto shaft", "授乳手交"],
-      ["cum shower, cum on face, cum on body, kneeling", "精子浴"],
-      ["after sex, creampie, cum dripping, lying on bed", "中出事后"],
-      ["spitroast, one partner in front, one partner behind, consensual group sex", "前后夹击"],
-      ["double penetration, consensual group sex, clearly group composition", "双穴插入"]
-    ];
-
-    V153_CACHE = {
-      byCat,
-      fixedBase,
-      actionBig: unique(actionBig),
-      nsfwCore,
-      contexts,
-      stats: { fixedBase: fixedBase.length, actionBig: unique(actionBig).length }
-    };
-    return V153_CACHE;
-  }
-
-  function draw(pool, n, used){
-    const available = shuffle(pool.filter(x=>!used.has(norm(x))));
-    const out=[];
-    while(out.length<n && available.length){
-      const v=available.pop();
-      if(!safeBigTag(v.split(',')[0])) { out.push(v); used.add(norm(v)); }
-      else { out.push(v); used.add(norm(v)); }
-    }
-    return out;
-  }
-
-  function prefixFor(mode, partnerMode, manual){
-    const p=[];
-    if(!/\b1girl\b/.test(manual||"")) p.push("1girl");
-    if(mode!=="nsfw"){
-      if(!/\bsolo\b/.test(manual||"")) p.push("solo");
-      p.push("single focus");
-      return p;
-    }
-    if(partnerMode==="1boy") return [...p,"1boy","duo"];
-    if(partnerMode==="2boys") return [...p,"2boys","threesome","consensual group sex"];
-    if(partnerMode==="group") return [...p,"multiple boys","group sex","consensual group sex"];
-    return [...p,"solo","single focus"];
-  }
-
-  function partnerTags(mode, partnerMode){
-    if(mode!=="nsfw") return [];
-    if(partnerMode==="1boy") return ["visible male partner","male body visible","male face partly visible","male arms holding her","male hands on her body","only one boy"];
-    if(partnerMode==="2boys") return ["two visible male partners","two male bodies visible","one boy in front, one boy behind","only two boys"];
-    if(partnerMode==="group") return ["multiple visible male partners","several male bodies visible","multiple male hands","surrounded by men","no extra girls"];
-    return ["pov","male pov"];
-  }
-
-  function countGuard(mode, partnerMode){
-    if(mode!=="nsfw") return ["no extra characters","no multiple girls","no crowd"];
-    if(partnerMode==="1boy") return ["no extra characters","no multiple girls","only one boy","no crowd","single sex position","one pose only"];
-    if(partnerMode==="2boys") return ["no extra characters","no multiple girls","only two boys","no crowd","single sex position","one pose only"];
-    if(partnerMode==="group") return ["no extra girls","single sex position","one pose only"];
-    return ["no extra characters","no multiple girls","no crowd","single sex position","one pose only"];
-  }
-
-  function v153Compact(parts){
-    let tags=unique(parts);
-    const target = tags.length>=42 ? 28 : tags.length>=36 ? 26 : tags.length>=30 ? 24 : 22;
-    const low=[/^very aesthetic$/i,/^newest$/i,/^highly detailed$/i,/^cg illustration$/i,/^dramatic lighting$/i,/^atmospheric lighting$/i,/^soft shadows$/i,/^glowing particles$/i,/^floating petals$/i,/^motion blur$/i,/^wind$/i,/^hair flowing$/i,/^natural expression$/i,/^soft smile$/i,/^playful smile$/i,/^confident smile$/i,/^beautiful .*$/i,/^detailed .*$/i,/^dreamy .*$/i,/^cinematic .*$/i,/^gentle .*$/i,/^bright .*$/i];
-    for(let i=tags.length-1;i>=0 && tags.length>target;i--){
-      const t=tags[i];
-      if(V153_CORE_KEEP.has(norm(t))) continue;
-      if(low.some(rx=>rx.test(t))) tags.splice(i,1);
-    }
-    for(let i=tags.length-1;i>=0 && tags.length>target;i--){
-      const t=tags[i];
-      if(V153_CORE_KEEP.has(norm(t))) continue;
-      tags.splice(i,1);
-    }
-    return tags;
-  }
-
-
-  const V153_ZH_BY_TAG = new Map((typeof activeTags!=="undefined" && Array.isArray(activeTags) ? activeTags : []).map(t=>[
-    String(t.tag||"").replace(/_/g," ").replace(/\s+/g," ").toLowerCase().trim(),
-    t.zh || t.tag || ""
-  ]));
-  const V153_BASIC_ZH = {
-    "running toward viewer":"朝镜头跑来", "walking forward":"向前走来", "twirling around":"原地旋身", "jumping lightly":"轻盈跳起",
-    "looking back":"回头", "reaching toward viewer":"朝镜头伸手", "reading a book":"读书", "holding book":"拿书", "holding teacup":"拿茶杯", "adjusting glasses":"扶眼镜",
-    "missionary position":"正常位", "cowgirl position":"骑乘位", "reverse cowgirl":"背面骑乘", "doggystyle":"后入位", "side entry sex":"侧入位", "breeding press":"种付压迫位", "mating press":"种付压迫位",
-    "blowjob":"口交", "handjob":"手交", "thighjob":"腿交", "breastjob":"乳交", "footjob":"足交", "lactation":"授乳", "after sex":"事后", "cum shower":"精液浴",
-    "close-up":"近景", "extreme close-up":"特写", "upper body":"上半身", "full body":"全身", "from above":"俯视", "low angle":"仰视", "side view":"侧视", "dutch angle":"荷兰角", "wide angle":"广角",
-    "dynamic composition":"动态构图", "strong perspective":"强透视", "extreme perspective":"极端透视", "strong foreshortening":"强前缩透视", "high visual tension":"高张力构图", "dramatic lighting":"戏剧光影", "atmospheric lighting":"氛围光", "warm bedroom light":"卧室暖光"
-  };
-  const V153_TOKEN_ZH = {
-    running:"奔跑", walking:"行走", jumping:"跳起", twirling:"旋转", around:"绕身", toward:"朝向", viewer:"镜头", forward:"向前", looking:"看向", back:"回头", holding:"拿着", book:"书", teacup:"茶杯", adjusting:"整理", glasses:"眼镜",
-    orange:"橙色", dark:"昏暗", bright:"明亮", gentle:"柔和", traditional:"传统风", sporty:"运动风", nurse:"护士", room:"房间", bedroom:"卧室", sky:"天空", forest:"森林", rooftop:"屋顶", beach:"海滩", garden:"花园", close:"近", up:"近", extreme:"极端", upper:"上半身", body:"身体", full:"全身", from:"从", above:"上方", low:"低位", angle:"角度", side:"侧面", dutch:"荷兰角", wide:"广角", dynamic:"动态", composition:"构图", strong:"强", perspective:"透视", foreshortening:"前缩透视", high:"高", visual:"视觉", tension:"张力", dramatic:"戏剧化", lighting:"光影", atmospheric:"氛围", soft:"柔和", sunlight:"日光", warm:"暖色", moonlight:"月光", candlelight:"烛光", neon:"霓虹", light:"光"
-  };
-  function v153NormalizeZhKey(s){ return String(s||"").replace(/_/g," ").replace(/\s+/g," ").toLowerCase().trim(); }
-  function v153Zh(s){
-    const raw=String(s||"").trim();
-    if(!raw) return "";
-    const key=v153NormalizeZhKey(raw);
-    if(V153_ZH_BY_TAG.has(key)) return V153_ZH_BY_TAG.get(key);
-    if(V153_BASIC_ZH[key]) return V153_BASIC_ZH[key];
-    if(key.includes(" / ")) return key.split(" / ").map(v153Zh).join(" / ");
-    if(key.includes(" + ")) return key.split(" + ").map(v153Zh).join(" + ");
-    const translated=key.split(" ").filter(Boolean).map(p=>V153_TOKEN_ZH[p]||p).join("");
-    return translated || raw;
-  }
-  function v153ZhList(arr, limit){ return (arr||[]).slice(0, limit||4).map(v153Zh).filter(Boolean).join(" / "); }
-  function v153EscapeHtml(s){ return String(s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\\"":"&quot;","'":"&#39;"}[c] || c)); }
-
-  function v153MakePrompt(mode, char, partnerMode, tensionMode, batchUsed){
-    const P=buildV153Pools();
-    const actual = mode==="mixed" ? (Math.random()>.5 ? "sfw" : "nsfw") : mode;
-    const used=batchUsed || new Set();
-    const manual=(char||"").trim();
-
-    const hair=draw(P.byCat.hair||[], 2, used);
-    const eyes=draw(P.byCat.eyes||[], 1, used);
-    const face=draw([...(P.byCat.face||[]), ...(P.byCat.expression||[])], actual==="sfw"?2:3, used);
-    const body=draw([...(P.byCat.body||[]), ...(P.byCat.species||[])], 2, used);
-    const clothes=draw(P.byCat.clothing||[], actual==="sfw"?3:2, used);
-    const acc=draw(P.byCat.accessory||[], 1, used);
-    const scene=draw(P.byCat.background||[], 2, used);
-    const camera=draw([...(P.byCat.camera||[]), ...(P.byCat.composition||[]), ...(P.byCat.effects||[])], tensionMode==="on"?3:2, used);
-    const light=draw([...(P.byCat.lighting||[]), ...(P.byCat.effects||[])], 2, used);
-
-    let action=[], titleAction="";
-    if(actual==="sfw"){
-      action=draw(P.actionBig, 1, used);
-      titleAction=action[0] || "随机动作";
-    }else{
-      const core=pick(P.nsfwCore);
-      action=[core[0]];
-      titleAction=core[1];
-      action.push(...draw(P.fixedBase, 1, used));
-    }
-
-    const tension = tensionMode==="on" ? ["extreme perspective","strong foreshortening","dynamic composition","high visual tension","dutch angle","motion lines","lively movement"] : [];
-    const rating = actual==="sfw" ? ["sfw","no text"] : ["explicit","uncensored","no text"];
-    const quality = ["masterpiece","best quality"];
-
-    const parts = [
-      ...prefixFor(actual, partnerMode, manual),
-      manual,
-      ...quality,
-      ...(manual ? [] : [...body, ...hair, ...eyes]),
-      ...face,
-      ...clothes,
-      ...acc,
-      ...partnerTags(actual, partnerMode),
-      ...action,
-      ...scene,
-      ...camera,
-      ...light,
-      ...tension,
-      ...rating,
-      ...countGuard(actual, partnerMode)
-    ];
-    const compacted=v153Compact(parts);
-    const prompt=compacted.join(", ");
-    const actionZh=v153Zh(titleAction || (action[0]||"随机动作"));
-    const sceneZh=v153ZhList(scene,4) || "随机场景";
-    const cameraZh=v153ZhList(camera,3) || "随机镜头";
-    const lightZh=v153ZhList(light,3) || "随机光影";
-    const partnerZh = actual==="nsfw" ? ({pov:"POV","1boy":"1boy","2boys":"2boys",group:"3boys+"}[partnerMode]||"POV") : "单人";
-    const tensionZh = tensionMode==="on" ? "强张力开启" : "强张力关闭";
-    const summary=`模式 ${actual.toUpperCase()}；交互方 ${partnerZh}；动作 ${actionZh}；场景 ${sceneZh}；镜头/构图 ${cameraZh}；光影 ${lightZh}`;
-    const summaryHtml=`<div class="v154-summary-grid"><div><b>模式</b>${v153EscapeHtml(actual.toUpperCase())}；<b>交互方</b>${v153EscapeHtml(partnerZh)}；<b>${v153EscapeHtml(tensionZh)}</b></div><div><b>动作</b>${v153EscapeHtml(actionZh)}</div><div><b>场景</b>${v153EscapeHtml(sceneZh)}</div><div><b>镜头/构图</b>${v153EscapeHtml(cameraZh)}</div><div><b>光影</b>${v153EscapeHtml(lightZh)}</div></div>`;
-    return {title:(actual==="sfw"?"SFW":"NSFW")+"｜"+actionZh, prompt, summary, summaryHtml};
-  }
-
-  window.renderBatch = function(){
-    const P=buildV153Pools();
-    const cnt=Math.max(1,Math.min(50,Number($("#batch-count").value||8)));
-    const mode=$("#batch-mode").value;
-    const char=$("#batch-character").value;
-    const partnerMode=$("#batch-partner-mode") ? $("#batch-partner-mode").value : "pov";
-    const tensionMode=$("#batch-tension-mode") ? $("#batch-tension-mode").value : "on";
-    const wrap=$("#batch-results");
-    if(!wrap) return;
-    const stats=$("#batch-pool-stats");
-    if(stats) stats.textContent=`第二页 v1.5.3：固定大池 ${P.stats.fixedBase} 条；大动作池 ${P.stats.actionBig} 条。现在动作从大动作池抽，不再只用原来的十几个 pose。`;
-    wrap.innerHTML="";
-    const batchUsed=new Set();
-    for(let i=0;i<cnt;i++){
-      const item=v153MakePrompt(mode,char,partnerMode,tensionMode,batchUsed);
-      const box=document.createElement("div");
-      box.className="batch-item";
-      box.innerHTML=`<h3>${i+1}. ${item.title}</h3><div class="summary">${item.summaryHtml||item.summary}</div><textarea data-v152done="1" data-compacted="1">${item.prompt}</textarea><button class="copy-one">复制这一条</button>`;
-      box.querySelector(".copy-one").onclick=()=>copyText(box.querySelector("textarea").value);
-      wrap.appendChild(box);
-    }
-  };
-
-  window.makePrompt = function(mode,char,partnerMode="pov",tensionMode="on",batchUsed=new Set()){
-    return v153MakePrompt(mode,char,partnerMode,tensionMode,batchUsed);
-  };
-
-  function installV153(){
-    const btn=$("#make-batch");
-    if(btn) btn.onclick=window.renderBatch;
-    const stats=$("#batch-pool-stats");
-    if(stats){
-      const P=buildV153Pools();
-      stats.textContent=`第二页 v1.5.3：固定大池 ${P.stats.fixedBase} 条；大动作池 ${P.stats.actionBig} 条。`;
-    }
-  }
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", installV153);
-  else installV153();
-  setTimeout(installV153, 500);
-})();
-
+function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-note").value.trim(),content=$("#artist-content").value.trim();if(!name||!content){toast("名称和内容不能为空");return}let list=getStore("dpcl_artist_list");list.unshift({id:Date.now(),name,note,content});setStore("dpcl_artist_list",list);$("#artist-name").value=$("#artist-note").value=$("#artist-content").value="";renderArtistList();toast("画师串已保存")}function renderArtistList(){let w=$("#artist-list"),list=getStore("dpcl_artist_list");w.innerHTML="";if(!list.length){w.innerHTML='<div class="empty">还没有保存画师串。</div>';return}list.forEach(it=>{let d=document.createElement("div");d.className="library-card";d.innerHTML=`<h3>${escapeHtml(it.name)}</h3><p>${escapeHtml(it.note||"")}</p><textarea readonly>${escapeHtml(it.content)}</textarea><div class="library-actions"><button data-copy>复制</button><button data-del>删除</button></div>`;d.querySelector("[data-copy]").onclick=()=>copyText(it.content);d.querySelector("[data-del]").onclick=()=>{setStore("dpcl_artist_list",list.filter(x=>x.id!==it.id));renderArtistList()};w.appendChild(d)})}document.addEventListener("DOMContentLoaded",()=>{setupTabs();generateCards();renderPicked();renderOCList();renderArtistList();const tagStatus=$("#tag-source-status");if(tagStatus)tagStatus.textContent=`本地库：${TAGS.length.toLocaleString()} tags`;$("#refresh-cards").onclick=generateCards;$("#clear-picked").onclick=()=>{picked=[];renderPicked();renderStage();$("#export-output").value=""};$("#export-picked").onclick=()=>{exportPicked();toast("已导出")};$("#copy-picked").onclick=()=>copyText(exportPicked());$("#make-batch").onclick=renderBatch;$("#copy-batch").onclick=()=>copyText(getBatchText());$("#download-batch").onclick=()=>downloadText("batch_prompts.txt",getBatchText());$("#save-oc").onclick=saveOC; if($("#compress-oc-images")) $("#compress-oc-images").onclick=()=>compactOCImages(false); compactOCImages(true);$("#save-artist").onclick=saveArtist});
 
 
 /* ===== v1.7 balanced action sampler =====
@@ -1702,8 +798,9 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
   }
   function tagList(arr){ return arr.map(x => x.tag || x); }
   function zhList(arr, n=99){ return arr.slice(0,n).map(zhOf).join(" / "); }
-  function compact(parts){
+  function compact(parts, extraKeep){
     let tags = unique(parts);
+    const keep = extraKeep ? new Set([...CORE_KEEP, ...extraKeep.map(norm)]) : CORE_KEEP;
     const target = tags.length>=42 ? 28 : tags.length>=36 ? 26 : tags.length>=30 ? 24 : 22;
     const low=[
       /^very aesthetic$/i,/^newest$/i,/^highly detailed$/i,/^cg illustration$/i,
@@ -1714,12 +811,12 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
     ];
     for(let i=tags.length-1;i>=0 && tags.length>target;i--){
       const t=tags[i];
-      if(CORE_KEEP.has(norm(t))) continue;
+      if(keep.has(norm(t))) continue;
       if(low.some(rx=>rx.test(t))) tags.splice(i,1);
     }
     for(let i=tags.length-1;i>=0 && tags.length>target;i--){
       const t=tags[i];
-      if(CORE_KEEP.has(norm(t))) continue;
+      if(keep.has(norm(t))) continue;
       tags.splice(i,1);
     }
     return tags;
@@ -1965,7 +1062,137 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
     ["bukkake, multiple visible penises, cum on face, cum on body, kneeling, penis, visible penis, erect penis, genital focus, explicit genitalia, uncensored genitals", "多人射精"]
   ].map(x=>({tag:x[0], zh:x[1]}));
 
+  const NSFW_LOCKS = {
+    pen: "pussy, visible pussy, spread pussy, penis, visible penis, erect penis, vaginal penetration, penis insertion, penis inside pussy, genital focus, explicit genitalia, uncensored genitals",
+    oral: "penis, visible penis, erect penis, mouth contact, genital focus, explicit genitalia, uncensored genitals",
+    cunni: "pussy, visible pussy, spread pussy, genital focus, explicit genitalia, uncensored genitals",
+    anal: "anus, visible anus, anal penetration, penis, visible penis, erect penis, penis inside anus, genital focus, explicit genitalia, uncensored genitals",
+    gen: "penis, visible penis, erect penis, genital focus, explicit genitalia, uncensored genitals",
+    group: "multiple visible penises, consensual group sex, pussy, visible pussy, spread pussy, penis, visible penis, erect penis, genital focus, explicit genitalia, uncensored genitals",
+    after: "pussy, visible pussy, spread pussy, cum, afterglow, genital focus, explicit genitalia, uncensored genitals"
+  };
+  const NSFW_EXTRA_SEED = [
+    ["missionary position, eye contact, legs wrapped around waist, slow sex","眼神正常位","lying","pen"],
+    ["missionary position, ankles held up, deep penetration","抬脚正常位","lying","pen"],
+    ["missionary position, legs on shoulders, knees near chest","腿架肩正常位","lying","pen"],
+    ["missionary position, fingers intertwined, passionate","十指相扣正常位","lying","pen"],
+    ["mating press, knees pressed to chest, deep","种付深压","lying","pen"],
+    ["breeding press, hips raised, close embrace","贴腰种付","lying","pen"],
+    ["seashell position, knees near shoulders, hips lifted","贝壳抬腿","lying","pen"],
+    ["butterfly position, hips lifted, bed edge","床边蝴蝶位","lying","pen"],
+    ["folded deckchair position, legs folded high","折叠椅位","lying","pen"],
+    ["eagle position, legs spread wide, deep","展鹰深位","lying","pen"],
+    ["g-whiz position, legs over shoulders, hips lifted","G点抬腿","lying","pen"],
+    ["coital alignment, grinding, eye contact","贴合磨蹭","lying","pen"],
+    ["piledriver position, hips raised high","打桩抬臀","lying","pen"],
+    ["missionary position, consensual bondage, blindfold","蒙眼正常位","lying","pen"],
+    ["missionary position, rope bondage, consensual","绳缚正常位","lying","pen"],
+    ["doggystyle, face down, hips raised","俯身后入","behind","pen"],
+    ["doggystyle, looking back, hair pulled","回眸后入","behind","pen"],
+    ["prone bone, pillow under hips, deep","垫枕俯卧","behind","pen"],
+    ["prone bone, hands held, consensual","按住双手俯卧","behind","pen"],
+    ["turtle position, curled forward, hips high","龟缩后入","behind","pen"],
+    ["downward dog position, hands and feet on floor","下犬式后入","behind","pen"],
+    ["bent over desk, hands on table","桌边弯腰","behind","pen"],
+    ["standing doggystyle, hands on wall","扶墙站立后入","behind","pen"],
+    ["standing doggystyle, hair pulled, consensual","抓发站立后入","behind","pen"],
+    ["bent over, spread legs, from behind","弯腰后入","behind","pen"],
+    ["hanging rear entry, held up, legs wrapped","抱起后入","lift","pen"],
+    ["cowgirl position, leaning forward, eye contact","前倾骑乘","riding","pen"],
+    ["cowgirl position, bouncing, hands on chest","起伏骑乘","riding","pen"],
+    ["reverse cowgirl, arched back","反骑弓背","riding","pen"],
+    ["squatting cowgirl, thighs tense","深蹲骑乘·紧绷","riding","pen"],
+    ["sideways cowgirl, facing side","侧坐骑乘·侧身","riding","pen"],
+    ["lotus position, face-to-face, embrace","莲花坐","riding","pen"],
+    ["yab-yum, seated, close embrace","双修坐","riding","pen"],
+    ["lap sex, grinding, hands on shoulders","膝上磨蹭","riding","pen"],
+    ["chair sex, facing, hands on hips","椅上面对面","riding","pen"],
+    ["sofa sex, lying back, legs wrapped","沙发仰躺","lying","pen"],
+    ["table sex, sitting on edge, legs spread","桌边坐入·张腿","standing","pen"],
+    ["bed edge sex, hips lifted, standing partner","床边抬臀","lying","pen"],
+    ["floor sex, legs spread, hands held","地板张腿","lying","pen"],
+    ["against wall, one leg lifted, deep","墙边抬腿","standing","pen"],
+    ["against window, hands on glass, city lights","窗边扶玻璃","standing","pen"],
+    ["shower sex, hands on wall, wet body","淋浴扶墙","standing","pen"],
+    ["bathtub sex, sitting, water splashes","浴缸坐入","riding","pen"],
+    ["mirror sex, standing, eye contact in mirror","镜前站立","standing","pen"],
+    ["stair sex, sitting on stairs, partner below","楼梯坐入·抬臀","lying","pen"],
+    ["pool sex, standing, water","泳池站立","standing","pen"],
+    ["beach sex, lying on sand, sunset","沙滩仰躺","lying","pen"],
+    ["car sex, back seat, cramped","车内后座","lying","pen"],
+    ["balcony sex, standing, city night","阳台站立","standing","pen"],
+    ["suspended sex, held up, legs wrapped","悬空抱起","lift","pen"],
+    ["standing carry, legs wrapped around waist","站立抱起","lift","pen"],
+    ["wall carry, one leg, deep","墙边抱起","lift","pen"],
+    ["scissors position, legs intertwined","剪刀交缠","side","pen"],
+    ["pretzel position, one leg raised, side","椒盐卷饼","side","pen"],
+    ["spork position, partner between legs","叉勺侧入","side","pen"],
+    ["side saddle position, partner beside","侧鞍位·侧卧","side","pen"],
+    ["spooning sex, leg raised, slow","侧卧抬腿","side","pen"],
+    ["side entry sex, leg over hip, eye contact","侧入对视","side","pen"],
+    ["face-to-face side sex, fingers intertwined","侧卧相拥","side","pen"],
+    ["blowjob, eye contact, kneeling","跪姿对视口交","oral","oral"],
+    ["deepthroat, head tilted back","深喉仰头","oral","oral"],
+    ["face fucking, hands in hair, consensual","抓发口交","oral","oral"],
+    ["69, mutual oral, legs intertwined","六九交缠","oral","oral"],
+    ["side 69, lying sideways","侧卧六九","oral","oral"],
+    ["standing blowjob, partner standing","站立口交·对视","oral","oral"],
+    ["paizuri, eye contact, oiled","乳交对视","oral","oral"],
+    ["handjob, close-up, eye contact","手交对视","gen","gen"],
+    ["two-handed handjob, kneeling","双手手交·跪姿","gen","gen"],
+    ["thighjob, standing, thighs pressed","站立素股","gen","gen"],
+    ["footjob, soles framing shaft","足交特写","gen","gen"],
+    ["armpit sex, arm pressed","腋交·贴身","gen","gen"],
+    ["intercrural, standing, from behind","站立股间","standing","gen"],
+    ["mutual masturbation, eye contact","互相自慰·对视","gen","gen"],
+    ["fingering, eye contact, legs spread","指交对视","cunni","cunni"],
+    ["cunnilingus, eye contact, legs spread","舔阴对视","cunni","cunni"],
+    ["facesitting, eye contact, hands in hair","坐脸对视","cunni","cunni"],
+    ["reverse facesitting, facing away","反向坐脸·背对","cunni","cunni"],
+    ["breast sucking, eye contact","吸乳对视","oral","oral"],
+    ["nipple play, arched back","乳首爱抚","oral","gen"],
+    ["anal missionary, legs on shoulders","正常位肛交·抬腿","lying","anal"],
+    ["anal doggystyle, face down, hips raised","后入肛交·俯身","behind","anal"],
+    ["anal cowgirl, reverse, arched back","骑乘肛交·反骑","riding","anal"],
+    ["anal spooning, leg raised","侧卧肛交·抬腿","side","anal"],
+    ["anal prone bone, pillow under hips","俯卧肛交·垫枕","behind","anal"],
+    ["anal standing, wall, one leg up","站立肛交·扶墙","standing","anal"],
+    ["anal wall, hands on wall","墙边肛交·抬腿","standing","anal"],
+    ["spitroast, one partner in front, one behind, consensual","前后夹击·双人","group","group"],
+    ["double penetration, two partners, consensual","双穴·双人","group","group"],
+    ["two boys servicing one girl, consensual","双男侍奉","group","group"],
+    ["threesome, two men one woman, consensual","三人·双男","group","group"],
+    ["group sex, surrounded by partners, consensual","多人环绕","group","group"],
+    ["bukkake, multiple partners, cum on face","多人射精·颜射","group","group"],
+    ["gangbang, consensual group, multiple partners","多人场景","group","group"],
+    ["group sex, multiple hands, eye contact","多手环绕","group","group"],
+    ["after sex, cuddling, messy sheets","事后依偎","after","after"],
+    ["afterglow, lying together, soft light","事后余韵","after","after"],
+    ["creampie, dripping, legs spread","中出滴落","after","after"],
+    ["cum on body, satisfied, eye contact","体液洒身","after","after"],
+    ["aftercare, gentle kiss, blanket","事后照顾","after","after"],
+    ["pillow talk, lying close, smiling","枕边低语","after","after"],
+    ["vibrator, eye contact, legs spread","震动棒","gen","gen"],
+    ["dildo, spread legs, eye contact","假阳具","gen","gen"],
+    ["anal beads, arched back","肛珠","anal","anal"],
+    ["butt plug, looking back","肛塞","anal","anal"],
+    ["strap-on, behind, consensual","穿戴式","behind","pen"],
+    ["blindfold, consensual bondage, missionary","蒙眼束缚","lying","pen"],
+    ["rope bondage, consensual, arched back","绳缚弓背","lying","pen"],
+    ["collar and leash, consensual, kneeling","项圈牵引","oral","gen"],
+    ["spanking, consensual, bent over","拍打","behind","gen"],
+    ["hair pulling, consensual, from behind","抓发","behind","pen"]
+  ];
+  const NSFW_USED_ZH = new Set(NSFW_CORES.map(c=>c.zh));
+  for(const [desc, zh, dyn, kind] of NSFW_EXTRA_SEED){
+    let z=zh;
+    while(NSFW_USED_ZH.has(z)) z += "·扩展";
+    NSFW_USED_ZH.add(z);
+    NSFW_CORES.push({ tag: desc + ", " + (NSFW_LOCKS[kind] || NSFW_LOCKS.pen), zh:z, dyn });
+  }
+
   let CACHE=null;
+  let NSFW_RECENT=[];
   function buildPools(){
     if(CACHE) return CACHE;
     const raw = (typeof activeTags !== "undefined" && Array.isArray(activeTags)) ? activeTags : [];
@@ -1990,6 +1217,7 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
       stats: {
         sfwActions:SFW_ACTIONS.length,
         nsfwActions:NSFW_CORES.length,
+        nsfwExtra:(byCat.nsfw_general||[]).length,
         context:context.length
       }
     };
@@ -2004,6 +1232,7 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
       p.push("single focus");
       return p;
     }
+    p.push("adult woman");
     if(partnerMode==="1boy") return [...p,"1boy","duo"];
     if(partnerMode==="2boys") return [...p,"2boys","threesome","consensual group sex"];
     if(partnerMode==="group") return [...p,"multiple boys","group sex","consensual group sex"];
@@ -2018,11 +1247,82 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
   }
   function guard(mode, partnerMode){
     if(mode!=="nsfw") return ["no extra characters","no multiple girls","no crowd"];
-    if(partnerMode==="1boy") return ["no extra characters","no multiple girls","only one boy","no crowd","single sex position","one pose only"];
-    if(partnerMode==="2boys") return ["no extra characters","no multiple girls","only two boys","no crowd","single sex position","one pose only"];
+    if(partnerMode==="1boy") return ["no extra characters","no multiple girls","only one boy","single sex position","one pose only"];
+    if(partnerMode==="2boys") return ["no extra characters","no multiple girls","only two boys","single sex position","one pose only"];
     if(partnerMode==="group") return ["no extra girls","single sex position","one pose only"];
-    return ["no extra characters","no multiple girls","no crowd","single sex position","one pose only"];
+    return ["no extra characters","no multiple girls","single sex position","one pose only"];
   }
+
+  const NSFW_DYNAMIC_GROUPS = {
+    lying: ["arched back","head thrown back","head tilted back","parted lips","half-closed eyes","flushed cheeks","sweat on skin","messy hair","legs wrapped around waist","toes curling","breathless","body trembling","hips moving","lip bite","gasping","sweat drops"],
+    behind: ["arched back","hips raised","face down","looking back","hands on hips","body pressed down","messy hair","flushed cheeks","breathless","spine curve","body trembling","hips moving","lip bite","gasping"],
+    standing: ["standing on tiptoe","knees buckling","hands against wall","body pressed close","head tilted back","breathless","messy hair","arched back","legs wrapped around waist","body trembling","lip bite","gasping"],
+    riding: ["hands on chest","head thrown back","arched back","bouncing","thighs trembling","messy hair","flushed cheeks","breathless","eye contact","body trembling","hips moving","lip bite","gasping"],
+    oral: ["eye contact","hair falling over face","flushed cheeks","half-closed eyes","hands in hair","messy hair","breathless","parted lips","blissful expression","gasping","looking up","lip bite"],
+    lift: ["legs wrapped around waist","arms around neck","body pressed close","floating hair","weightless","sweat on skin","head tilted back","breathless","body trembling","gasping"],
+    side: ["leg over hip","fingers intertwined","arched back","half-closed eyes","flushed cheeks","breathless","messy hair","body trembling","gasping"],
+    group: ["multiple hands on body","surrounded","close body contact","flushed cheeks","breathless","arched back","messy hair","blissful expression","body trembling","gasping"],
+    base: ["dynamic pose","flowing hair","sweat on skin","breathless","parted lips","half-closed eyes","flushed cheeks","messy hair"]
+  };
+  const NSFW_DYNAMIC_CAMERA = ["low angle","from below","dutch angle","dynamic angle","foreshortening","over-the-shoulder view","close-up","depth of field","wide shot","dynamic perspective"];
+  const NSFW_DYNAMIC_ATMOS = ["rim lighting","warm lighting","cool lighting","backlighting","soft shadows","sweat glistening","glowing skin","cinematic lighting","moody lighting"];
+  const NSFW_DYNAMIC_ZH = {
+    "arched back":"弓起背","head thrown back":"仰起头","head tilted back":"头向后仰","parted lips":"微张嘴唇",
+    "half-closed eyes":"半闭眼","flushed cheeks":"脸颊泛红","sweat on skin":"肌肤出汗","messy hair":"凌乱头发",
+    "fingers gripping sheets":"手指抓紧床单","hands gripping sheets":"双手抓紧床单","legs wrapped around waist":"双腿缠腰",
+    "toes curling":"脚趾蜷缩","breathless":"喘息","hips raised":"臀部抬起","face buried in pillow":"脸埋枕头",
+    "looking back":"回头看","body pressed down":"身体压低","spine curve":"脊背曲线","standing on tiptoe":"踮起脚",
+    "knees buckling":"膝盖发软","hands against wall":"双手扶墙","body pressed close":"身体紧贴","hands on chest":"双手扶胸",
+    "bouncing":"起伏","thighs trembling":"大腿颤抖","eye contact":"对视","hair falling over face":"头发垂落脸侧",
+    "hands in hair":"手指穿过头发","blissful expression":"愉悦表情","arms around neck":"双臂环颈","floating hair":"飘动头发",
+    "weightless":"失重感","leg over hip":"腿搭髋部","fingers intertwined":"十指相扣","multiple hands on body":"多只手抚触",
+    "surrounded":"被人群环绕","close body contact":"身体紧密接触","dynamic pose":"动态姿势","flowing hair":"飘动头发",
+    "low angle":"低角度","from below":"从下往上","dutch angle":"荷兰角","dynamic angle":"动态角度","foreshortening":"透视缩短",
+    "over-the-shoulder view":"过肩视角","close-up":"特写","depth of field":"景深","wide shot":"广角","dynamic perspective":"动态透视",
+    "rim lighting":"轮廓光","warm lighting":"暖光","cool lighting":"冷光","backlighting":"逆光","soft shadows":"柔和阴影",
+    "sweat glistening":"汗水闪光","glowing skin":"肌肤发光","cinematic lighting":"电影感光影","moody lighting":"氛围光","face down":"面朝下","hands on hips":"双手扶胯",
+    "body trembling":"身体颤抖","hips moving":"腰肢摆动","lip bite":"咬唇","gasping":"喘息","sweat drops":"汗珠","looking up":"仰视"
+  };
+  function nsfwCoreAllowed(core, partnerMode){
+    const t = String(core && core.tag || "").toLowerCase();
+    if (/tribadism|scissoring/.test(t)) return false;
+    const two = /spitroast|double penetration|two boys servicing|threesome/.test(t);
+    const group = /group sex|bukkake|gangbang|multiple visible male partners|multiple visible penises|surrounded by men/.test(t);
+    if (partnerMode === "pov" || partnerMode === "1boy") return !two && !group;
+    if (partnerMode === "2boys") return two || !group;
+    return true;
+  }
+  function nsfwDynamic(core, partnerMode, tensionMode, existingTags, batchUsed){
+    const t = String(core && (core.dyn || core.tag) || "").toLowerCase();
+    let group = NSFW_DYNAMIC_GROUPS.lying;
+    if (core && core.dyn && NSFW_DYNAMIC_GROUPS[core.dyn]) group = NSFW_DYNAMIC_GROUPS[core.dyn];
+    else if (/group sex|bukkake|gangbang|multiple visible male partners|surrounded by men/.test(t)) group = NSFW_DYNAMIC_GROUPS.group;
+    else if (/lifted sex|lifted position|lifted in arms|standing carry|carry position|being carried|suspended|held up/.test(t)) group = NSFW_DYNAMIC_GROUPS.lift;
+    else if (/doggystyle|from behind|prone|bent over|all fours|turtle|downward dog|desk|over the lap|kneeling rear/.test(t)) group = NSFW_DYNAMIC_GROUPS.behind;
+    else if (/cowgirl|riding|straddl|lap sex|chair sex|sofa lap|lotus|yab-yum|face-off|straddling/.test(t)) group = NSFW_DYNAMIC_GROUPS.riding;
+    else if (/blowjob|oral|deepthroat|sixty-nine|69|facesitting|cunnilingus|paizuri|handjob|footjob|thighjob|breastjob|armpit|mutual masturbation|fingering|two-finger|intercrural|spitroast|two boys servicing/.test(t)) group = NSFW_DYNAMIC_GROUPS.oral;
+    else if (/side|spoon|scissors|pretzel|spork|side saddle/.test(t)) group = NSFW_DYNAMIC_GROUPS.side;
+    else if (/standing|wall sex|against window|countertop|tabletop|stair|shower|bathtub/.test(t)) group = NSFW_DYNAMIC_GROUPS.standing;
+
+    const used = new Set((existingTags || []).map(norm));
+    if (batchUsed) for (const x of batchUsed) used.add(norm(x));
+    function sample(pool, count){
+      const out = [];
+      for (let i = 0; i < count; i++){
+        const avail = pool.filter(x => !used.has(norm(x)));
+        if (!avail.length) break;
+        const v = avail[Math.floor(Math.random() * avail.length)];
+        used.add(norm(v));
+        out.push(v);
+      }
+      return out;
+    }
+    const motion = sample(group, tensionMode === "on" ? 3 : 2);
+    const camera = sample(NSFW_DYNAMIC_CAMERA, 1);
+    const atmos = sample(NSFW_DYNAMIC_ATMOS, 1);
+    return [...motion, ...camera, ...atmos];
+  }
+  function zhDynamic(tag){ return NSFW_DYNAMIC_ZH[tag] || zhOf(tag); }
 
   function makeV17(mode, char, partnerMode, tensionMode, used){
     const P=buildPools();
@@ -2030,24 +1330,32 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
     const manual=(char||"").trim();
     const u=used||new Set();
 
-    const hair=draw(P.byCat.hair||[], manual?0:2, u);
+    const hair=draw(P.byCat.hair||[], manual?0:1, u);
     const eyes=draw(P.byCat.eyes||[], manual?0:1, u);
-    const body=draw([...(P.byCat.body||[]), ...(P.byCat.species||[])], manual?0:2, u);
-    const face=draw([...(P.byCat.face||[]), ...(P.byCat.expression||[])], actual==="sfw"?2:3, u);
-    const clothes=draw(P.byCat.clothing||[], actual==="sfw"?3:2, u);
+    const body=draw([...(P.byCat.body||[]), ...(P.byCat.species||[])], manual?0:1, u);
+    const face=draw([...(P.byCat.face||[]), ...(P.byCat.expression||[])], actual==="sfw"?2:1, u);
+    const clothes=draw(P.byCat.clothing||[], 1, u);
     const acc=draw(P.byCat.accessory||[], 1, u);
-    const scene=draw(P.byCat.background||[], 2, u);
-    const camera=draw([...(P.byCat.camera||[]), ...(P.byCat.composition||[]), ...(P.byCat.effects||[])], tensionMode==="on"?3:2, u);
-    const light=draw([...(P.byCat.lighting||[]), ...(P.byCat.effects||[])], 2, u);
-    const context=draw(P.context, actual==="sfw"?2:1, u);
+    const scene=draw(P.byCat.background||[], 1, u);
+    const camera=draw([...(P.byCat.camera||[]), ...(P.byCat.composition||[]), ...(P.byCat.effects||[])], actual==="sfw"?(tensionMode==="on"?3:2):2, u);
+    const light=draw([...(P.byCat.lighting||[]), ...(P.byCat.effects||[])], 1, u);
+    const context=actual==="sfw"
+      ? draw([...(P.byCat.pose||[]), ...(P.byCat.effects||[])], 2, u)
+      : draw([...(P.byCat.effects||[])], 1, u);
+    const nsfwExtra=actual==="nsfw" ? draw(P.byCat.nsfw_general||[], 3, u) : [];
 
     let action=[], actionCore;
+    const splitAction = core => String(core&&core.tag||"").split(",").map(s=>s.trim()).filter(Boolean);
     if(actual==="sfw"){
       actionCore=pick(SFW_ACTIONS,u);
-      action=[actionCore.tag, ...context];
+      action=[...splitAction(actionCore), ...context];
     }else{
-      actionCore=pick(NSFW_CORES,u);
-      action=[actionCore.tag, ...context];
+      const basePool=NSFW_CORES.filter(c=>nsfwCoreAllowed(c,partnerMode));
+      const freshPool=basePool.filter(c=>!NSFW_RECENT.includes(c.tag));
+      const nsfwPool=freshPool.length?freshPool:basePool;
+      actionCore=pick(nsfwPool.length?nsfwPool:NSFW_CORES,u);
+      NSFW_RECENT=[actionCore.tag,...NSFW_RECENT].slice(0,120);
+      action=[...splitAction(actionCore), ...context];
     }
 
     const tension = tensionMode==="on" ? ["extreme perspective","strong foreshortening","dynamic composition","high visual tension","dutch angle","motion lines","lively movement"] : [];
@@ -2062,11 +1370,30 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
       ...face, ...clothes, ...acc,
       ...partnerTags(actual, partnerMode),
       ...action,
+      ...nsfwExtra,
       ...scene, ...camera, ...light, ...tension,
       ...rating, ...guard(actual, partnerMode)
     ];
-    const finalTags=compact(parts);
-    const prompt=finalTags.join(", ");
+    const finalTags=compact(parts, action.slice(0,3));
+    const dynamicTags = actual==="nsfw" ? nsfwDynamic(actionCore, partnerMode, tensionMode, finalTags, null) : [];
+    const promptTags=[...finalTags];
+    const ensureSection = arr => {
+      for (const t of (arr||[])) {
+        if (t && !promptTags.some(x=>norm(x)===norm(t))) promptTags.push(t);
+      }
+    };
+    ensureSection(action.slice(0,3));
+    ensureSection(nsfwExtra.slice(0,2));
+    ensureSection(context.slice(0,1));
+    ensureSection(scene.slice(0,1));
+    ensureSection(camera.slice(0,1));
+    ensureSection(light.slice(0,1));
+    ensureSection(tension.slice(0,3));
+    for (const t of dynamicTags) {
+      if (!promptTags.some(x=>norm(x)===norm(t))) promptTags.push(t);
+      u.add(norm(t));
+    }
+    const prompt=promptTags.join(", ");
 
     const actionZh=zhOf(actionCore);
     const sceneZh=scene.map(x=>zhOf(x)).slice(0,3).join(" / ") || "随机场景";
@@ -2075,7 +1402,8 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
     const partnerZh = actual==="nsfw" ? ({pov:"POV","1boy":"1boy","2boys":"2boys",group:"3boys+"}[partnerMode]||"POV") : "单人";
     const tensionZh = tensionMode==="on" ? "强张力开启" : "强张力关闭";
     const title=`${actual==="sfw"?"SFW":"NSFW"}｜${actionZh}`;
-    const summaryHtml=`<div class="v154-summary-grid"><div><b>模式</b>${html(actual.toUpperCase())}；<b>交互方</b>${html(partnerZh)}；<b>${html(tensionZh)}</b></div><div><b>动作</b>${html(actionZh)}</div><div><b>动作补充</b>${html(context.map(x=>zhOf(x)).join(" / "))}</div><div><b>场景</b>${html(sceneZh)}</div><div><b>镜头/构图</b>${html(cameraZh)}</div><div><b>光影</b>${html(lightZh)}</div></div>`;
+    const dynamicLine = dynamicTags.length ? `<div><b>动态</b>${html(dynamicTags.map(zhDynamic).join(" / "))}</div>` : "";
+    const summaryHtml=`<div class="v154-summary-grid"><div><b>模式</b>${html(actual.toUpperCase())}；<b>交互方</b>${html(partnerZh)}；<b>${html(tensionZh)}</b></div><div><b>动作</b>${html(actionZh)}</div><div><b>补充</b>${html(context.map(x=>zhOf(x)).join(" / "))}</div>${dynamicLine}<div><b>场景</b>${html(sceneZh)}</div><div><b>镜头/构图</b>${html(cameraZh)}</div><div><b>光影</b>${html(lightZh)}</div></div>`;
     return {title, prompt, summaryHtml};
   }
 
@@ -2089,14 +1417,14 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
     const wrap=$("#batch-results");
     if(!wrap) return;
     const stats=$("#batch-pool-stats");
-    if(stats) stats.textContent=`第二页 v1.7：SFW 动作核心 ${P.stats.sfwActions} 个；NSFW 动作核心 ${P.stats.nsfwActions} 个；动作补充上下文 ${P.stats.context} 条。动作不再由前 4 个种子截断生成。`;
+    if(stats) stats.textContent=`第二页：SFW 动作核心 ${P.stats.sfwActions} 个；NSFW 动作核心 ${P.stats.nsfwActions} 个（按交互方过滤）；NSFW 扩展 ${P.stats.nsfwExtra} 条；动作补充上下文 ${P.stats.context} 条；NSFW 动态层已启用。`;
     wrap.innerHTML="";
     const batchUsed=new Set();
     for(let i=0;i<cnt;i++){
       const item=makeV17(mode,char,partnerMode,tensionMode,batchUsed);
       const box=document.createElement("div");
       box.className="batch-item";
-      box.innerHTML=`<h3>${i+1}. ${item.title}</h3><div class="summary">${item.summaryHtml}</div><textarea data-v152done="1" data-compacted="1">${item.prompt}</textarea><button class="copy-one">复制这一条</button>`;
+      box.innerHTML=`<h3>${i+1}. ${item.title}</h3><div class="summary">${item.summaryHtml}</div><textarea data-compacted="1">${item.prompt}</textarea><button class="copy-one">复制这一条</button>`;
       box.querySelector(".copy-one").onclick=()=>copyText(box.querySelector("textarea").value);
       wrap.appendChild(box);
     }
@@ -2109,11 +1437,10 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
     if(btn) btn.onclick=window.renderBatch;
     const P=buildPools();
     const stats=$("#batch-pool-stats");
-    if(stats) stats.textContent=`第二页 v1.7：SFW 动作核心 ${P.stats.sfwActions} 个；NSFW 动作核心 ${P.stats.nsfwActions} 个；动作补充上下文 ${P.stats.context} 条。`;
+    if(stats) stats.textContent=`第二页：SFW 动作核心 ${P.stats.sfwActions} 个；NSFW 动作核心 ${P.stats.nsfwActions} 个（按交互方过滤）；NSFW 扩展 ${P.stats.nsfwExtra} 条；动作补充上下文 ${P.stats.context} 条；NSFW 动态层已启用。`;
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", install);
   else install();
-  setTimeout(install, 500);
 })();
 
 
@@ -2121,69 +1448,6 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
 
 
 
-
-
-
-/* ===== v1.9 pretranslated full prompt display =====
-   这版不做运行时拆词翻译。
-   整条 prompt 中文翻译只读取 tags.js 已预写的 zh 字段；额外固定词只查 EXACT_ZH。
-*/
-(function(){
-  function norm(s){ return String(s||"").replace(/_/g," ").replace(/\s+/g," ").trim().toLowerCase(); }
-  function esc(s){ return String(s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
-  const ZH_BY_TAG = new Map();
-  if(typeof activeTags !== "undefined" && Array.isArray(activeTags)){
-    for(const t of activeTags){
-      if(t && t.tag) ZH_BY_TAG.set(norm(t.tag), t.zh || t.tag);
-    }
-  }
-  const EXACT_ZH = {
-    "1girl":"单女主","solo":"单人","single focus":"单人焦点","1boy":"一名男性","2boys":"两名男性",
-    "multiple boys":"多名男性","duo":"双人","threesome":"三人场景","group sex":"多人性爱",
-    "consensual group sex":"自愿多人交互","pov":"第一人称视角","male pov":"男性第一人称视角",
-    "masterpiece":"杰作","best quality":"最佳质量","sfw":"全年龄","explicit":"露骨","uncensored":"无码",
-    "no text":"无文字","no extra characters":"不要额外角色","no multiple girls":"不要多名女性","no crowd":"不要人群",
-    "single sex position":"单一性爱体位","one pose only":"仅一个姿势","only one boy":"仅一名男性","only two boys":"仅两名男性"
-  };
-  function zhOfTag(tag){
-    const k = norm(tag);
-    return ZH_BY_TAG.get(k) || EXACT_ZH[k] || tag;
-  }
-  function translatePrompt(prompt){
-    const parts = String(prompt||"").split(",").map(s=>s.trim()).filter(Boolean);
-    return parts.map((p,i)=>`${i+1}. ${zhOfTag(p)}`).join("\n");
-  }
-  function addZhBox(card){
-    const ta = card.querySelector("textarea");
-    if(!ta || card.querySelector(".zh-prompt-box")) return;
-    const prompt = ta.value || ta.textContent || "";
-    if(!prompt.trim()) return;
-    const zh = translatePrompt(prompt);
-    const box = document.createElement("div");
-    box.className = "zh-prompt-box";
-    box.innerHTML = `<div class="zh-prompt-title"><span>整条 prompt 中文翻译（预翻译词库）</span><button type="button" class="copy-zh-prompt">复制中文</button></div><div class="zh-prompt-text">${esc(zh)}</div>`;
-    ta.insertAdjacentElement("afterend", box);
-    box.querySelector(".copy-zh-prompt").onclick = () => {
-      if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(zh);
-      if(typeof toast === "function") toast("已复制中文翻译");
-    };
-  }
-  const oldRender = window.renderBatch;
-  if(typeof oldRender === "function"){
-    window.renderBatch = function(){
-      oldRender.apply(this, arguments);
-      document.querySelectorAll(".batch-item").forEach(addZhBox);
-    };
-  }
-  function install(){
-    const btn = document.querySelector("#make-batch");
-    if(btn && typeof window.renderBatch === "function") btn.onclick = window.renderBatch;
-    document.querySelectorAll(".batch-item").forEach(addZhBox);
-  }
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", install);
-  else install();
-  setTimeout(install, 300);
-})();
 
 
 
@@ -2258,85 +1522,6 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
     const btn = document.querySelector("#make-batch");
     if(btn) btn.onclick = window.renderBatch;
     updateActionLines();
-  }
-})();
-
-
-
-/* ===== v1.9.4 visible-genital lock for NSFW =====
-   修复 NSFW 正常位/种付位等体位经常看不到插入、阴部、阴茎的问题。
-   做法：
-   1. NSFW_CORES 已经加入 pussy / visible pussy / penis / visible penis / vaginal penetration / genital focus。
-   2. 这里再做一次生成后兜底，防止旧的压缩器把这些词裁掉。
-*/
-(function(){
-  const LOCKS = [
-    "pussy",
-    "visible pussy",
-    "penis",
-    "visible penis",
-    "erect penis",
-    "vaginal penetration",
-    "penis insertion",
-    "penis inside pussy",
-    "genital focus",
-    "explicit genitalia",
-    "uncensored genitals"
-  ];
-  const PENETRATION_HINTS = [
-    "missionary position", "breeding press", "mating press", "doggystyle", "side entry sex",
-    "cowgirl position", "reverse cowgirl", "lifted sex", "wall sex", "bed edge sex",
-    "bent over desk", "mirror sex", "standing sex", "sitting on partner's lap",
-    "pinned down on floor", "shower sex", "spooning sex", "prone bone", "standing rear entry",
-    "against window sex", "chair sex", "sofa sex", "floor sex", "tabletop sex"
-  ];
-  function hasAny(s, arr){
-    const x = String(s || "").toLowerCase();
-    return arr.some(k => x.includes(k));
-  }
-  function ensureLocks(text){
-    const lower = String(text || "").toLowerCase();
-    if(!hasAny(lower, PENETRATION_HINTS)) return text;
-    const tags = String(text || "").split(",").map(s => s.trim()).filter(Boolean);
-    const seen = new Set(tags.map(t => t.toLowerCase()));
-    for(const lock of LOCKS){
-      if(!seen.has(lock)) tags.push(lock);
-    }
-    return tags.join(", ");
-  }
-  function patchCards(){
-    document.querySelectorAll(".batch-item textarea").forEach(ta=>{
-      const old = ta.value || ta.textContent || "";
-      const newer = ensureLocks(old);
-      if(newer !== old){
-        if("value" in ta) ta.value = newer;
-        else ta.textContent = newer;
-      }
-    });
-  }
-  const oldRender = window.renderBatch;
-  if(typeof oldRender === "function" && !oldRender.__v194patched){
-    const wrapped = function(){
-      oldRender.apply(this, arguments);
-      patchCards();
-      setTimeout(patchCards, 0);
-      setTimeout(patchCards, 120);
-    };
-    wrapped.__v194patched = true;
-    window.renderBatch = wrapped;
-    const btn = document.querySelector("#make-batch");
-    if(btn) btn.onclick = window.renderBatch;
-  }
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", ()=>{
-      const btn = document.querySelector("#make-batch");
-      if(btn) btn.onclick = window.renderBatch;
-      patchCards();
-    });
-  }else{
-    const btn = document.querySelector("#make-batch");
-    if(btn) btn.onclick = window.renderBatch;
-    patchCards();
   }
 })();
 
@@ -2466,9 +1651,27 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
   function norm(s){return String(s||'').replace(/_/g,' ').replace(/\s+/g,' ').trim().toLowerCase();}
   function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function byId(pool,id){return pool.find(x=>x.id===id)||pool[0];}
+  function locationCompatible(item,text){
+    const low=String(text||"").toLowerCase();
+    const posture=item.id;
+    const lying=/lying|on back|on stomach|missionary|mating press|piledriver|butterfly|spooning|prone|side entry|side lying|legs spread/.test(low);
+    const standing=/standing (sex|position|doggystyle|split|face|carry|creampie|aftermath)|against wall|against window|wall sex|window sex|beside window|countertop|tabletop|shower|bathtub|stair|carried/.test(low);
+    const stairs=/stair|staircase/.test(low);
+    const riding=/riding|cowgirl|straddl|lap sex|chair sex|sofa lap|lotus|yab-yum|face-off|straddling/.test(low);
+    const rear=/doggystyle|from behind|bent over|all fours|prone|desk|kneeling rear|over the lap|turtle|downward dog/.test(low);
+    if(lying && ["standing","wall","window","lifted","chair","lap","sink","railing","car"].includes(posture)) return false;
+    if(standing && ["chair","lap","sofa","bededge","floor","table","sink","car","railing"].includes(posture)) return false;
+    if(riding && ["standing","wall","window","lifted","shower","car","railing","sink"].includes(posture)) return false;
+    if(rear && ["standing","lifted","chair","lap","car","bededge"].includes(posture)) return false;
+    if(stairs && ["shower","bathtub","bededge","sofa","car","floor"].includes(posture)) return false;
+    return true;
+  }
   function pick(pool,text){
     const low=String(text||'').toLowerCase();
-    const candidates=pool.filter(x=>!x.tag.split(',').some(t=>low.includes(t.trim().toLowerCase())));
+    const candidates=pool.filter(x=>{
+      if(pool===LOCATIONS && !locationCompatible(x,text)) return false;
+      return !x.tag.split(',').some(t=>low.includes(t.trim().toLowerCase()));
+    });
     const arr=candidates.length?candidates:pool;
     return arr[Math.floor(Math.random()*arr.length)];
   }
@@ -2629,7 +1832,6 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
     list.forEach(it=>{const d=document.createElement('div');d.className='library-card';d.innerHTML=`<h3>${esc(it.name)}</h3><textarea readonly>${esc(it.content)}</textarea><div class="library-actions"><button data-copy>复制</button><button data-add>加入组合草稿</button><button data-del>删除</button></div>`;d.querySelector('[data-copy]').onclick=()=>copy(it.content);d.querySelector('[data-add]').onclick=()=>{const x=q('#compose-scene'); if(x) x.value=(x.value?x.value+', ':'')+it.content; combinePrompt();};d.querySelector('[data-del]').onclick=()=>{storeSet('dpcl_preset_list',list.filter(x=>x.id!==it.id));renderPreset();};w.appendChild(d);});
   }
   function install(){
-    q('#oc-search')?.addEventListener('input',renderOCList); q('#oc-sort')?.addEventListener('change',renderOCList); q('#oc-collapse-all')?.addEventListener('click',()=>qa('#oc-list details').forEach(x=>x.open=false));
     q('#save-pending')?.addEventListener('click',savePending); q('#compose-run')?.addEventListener('click',combinePrompt); q('#compose-copy')?.addEventListener('click',()=>copy(combinePrompt())); q('#save-preset')?.addEventListener('click',savePreset);
     renderOCList(); renderPending(); renderPreset(); combinePrompt();
   }
@@ -2752,9 +1954,6 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
     if(typeof renderOCList !== 'undefined') renderOCList = renderOCList198;
     const saveBtn=$('#save-oc'); if(saveBtn) saveBtn.onclick=saveOrUpdateOC198;
     const cancel=$('#oc-cancel-edit'); if(cancel) cancel.onclick=()=>setEditMode(null);
-    $('#oc-search')?.addEventListener('input', renderOCList198);
-    $('#oc-sort')?.addEventListener('change', renderOCList198);
-    $('#oc-collapse-all')?.addEventListener('click',()=>$$('#oc-list details').forEach(x=>x.open=false));
     const oldRender = window.renderBatch;
     if(typeof oldRender === 'function' && !oldRender.__v198NoZh){
       const wrapped=function(){ oldRender.apply(this, arguments); removeZhPromptBoxes(); };
@@ -2952,12 +2151,11 @@ function saveArtist(){let name=$("#artist-name").value.trim(),note=$("#artist-no
     const by=new Map(folders.map(f=>[f.id,[]]));
     list.forEach(x=>{const id=normalizeFolderId(x.folderId); if(!by.has(id)) by.set(UNCAT,[]); (by.get(id)||by.get(UNCAT)).push(x);});
     const closed=getClosed(); w.innerHTML='';
-    if(!list.length){w.innerHTML='<div class="empty">没有找到 OC。</div>';return;}
+    if(!list.length && folders.length<=1){w.innerHTML='<div class="empty">还没有保存 OC。</div>';return;}
     folders.forEach(folder=>{
       const items=by.get(folder.id)||[];
       if(folderFilter==='__all' && keyword && !items.length) return;
       if(folderFilter!=='__all' && folder.id!==folderFilter) return;
-      if(folderFilter==='__all' && !keyword && !items.length && folder.id!==UNCAT) return;
       const sec=document.createElement('section');
       sec.className='oc-folder'+(closed.has(folder.id)?' collapsed':'');
       sec.dataset.folderId=folder.id;
